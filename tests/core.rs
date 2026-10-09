@@ -1,0 +1,163 @@
+use bio_flodl::{alphabet::*, encode::*, graph::*};
+
+#[test]
+fn one_hot_dna() {
+    let oh = one_hot(b"acgt", &Alphabet::DNA).unwrap();
+    assert_eq!(oh.shape(), [4, 4]);
+    assert_eq!(&oh.data[0..4], &[1., 0., 0., 0.]);
+    assert_eq!(&oh.data[12..16], &[0., 0., 0., 1.]);
+}
+
+#[test]
+fn unknown_symbol_errors_and_lenient_zeros() {
+    assert!(one_hot(b"ACN", &Alphabet::DNA).is_err());
+    let oh = one_hot_lenient(b"ACN", &Alphabet::DNA);
+    assert_eq!(&oh.data[8..12], &[0., 0., 0., 0.]);
+}
+
+#[test]
+fn channels_first_roundtrip() {
+    let oh = one_hot(b"AC", &Alphabet::DNA).unwrap();
+    // channels: A=[1,0], C=[0,1], G=[0,0], T=[0,0]
+    assert_eq!(oh.channels_first(), vec![1., 0., 0., 1., 0., 0., 0., 0.]);
+}
+
+#[test]
+fn batch_padding_and_mask() {
+    let b = one_hot_batch(&[b"AC", b"A"], &Alphabet::DNA, None);
+    assert_eq!(b.shape(), [2, 2, 4]);
+    assert_eq!(b.mask, vec![1., 1., 1., 0.]);
+}
+
+#[test]
+fn kmers() {
+    let v = kmer_counts(b"AAAC", 2, &Alphabet::DNA).unwrap();
+    assert_eq!(v.len(), 16);
+    assert_eq!(v[0], 2.0); // AA
+    assert_eq!(v[1], 1.0); // AC
+}
+
+#[test]
+fn revcomp_gc() {
+    assert_eq!(reverse_complement(b"AACG"), b"CGTT");
+    assert!((gc_content(b"GCAT") - 0.5).abs() < 1e-6);
+}
+
+#[test]
+fn adjacency_and_gcn() {
+    let g = Graph::from_edges(3, false, &[(0, 1), (1, 2)]).unwrap();
+    assert_eq!(g.adjacency(), vec![0., 1., 0., 1., 0., 1., 0., 1., 0.]);
+    assert_eq!(g.degrees(), vec![1., 2., 1.]);
+    let n = g.gcn_normalized();
+    assert!((n[0] - 0.5).abs() < 1e-6); // 1/sqrt(2)*1/sqrt(2)
+    let l = g.laplacian();
+    assert_eq!(l[0], 1.0);
+    assert_eq!(l[1], -1.0);
+}
+
+#[test]
+fn dense_roundtrip_and_components() {
+    let g = Graph::from_edges(4, false, &[(0, 1), (2, 3)]).unwrap();
+    let g2 = Graph::from_dense(&g.adjacency(), 4, false).unwrap();
+    assert_eq!(g2.adjacency(), g.adjacency());
+    let c = g.connected_components();
+    assert_eq!(c[0], c[1]);
+    assert_ne!(c[1], c[2]);
+}
+
+#[test]
+fn contact_map() {
+    let coords = [[0., 0., 0.], [3.8, 0., 0.], [7.6, 0., 0.], [0., 5., 0.]];
+    let d = distance_matrix(&coords);
+    let g = from_contact_map(&d, 4, 8.0, 2).unwrap();
+    assert!(g.edges.iter().all(|&(i, j, _)| j - i >= 2));
+}
+
+#[test]
+fn de_bruijn_graph() {
+    let (labels, g) = de_bruijn(&[b"ACGTA"], 3).unwrap();
+    assert_eq!(labels.len(), 4); // AC CG GT TA
+    assert_eq!(g.edges.len(), 3);
+}
+
+use bio_flodl::data::*;
+
+#[test]
+fn rng_is_reproducible_and_shuffles() {
+    let mut a = Rng::new(7);
+    let mut b = Rng::new(7);
+    assert_eq!(a.next_u64(), b.next_u64());
+    let mut v: Vec<usize> = (0..50).collect();
+    Rng::new(1).shuffle(&mut v);
+    let mut s = v.clone();
+    s.sort();
+    assert_eq!(s, (0..50).collect::<Vec<_>>());
+    assert_ne!(v, s);
+}
+
+#[test]
+fn dataset_shapes_split_and_batches() {
+    let seqs: Vec<&[u8]> = vec![b"ACGT", b"TTTT", b"GGCC", b"AAAA"];
+    let ds = Dataset::from_sequences(&seqs, &[0, 1, 0, 1], &Alphabet::DNA, 4, true).unwrap();
+    assert_eq!(ds.sample_shape, vec![4, 4]);
+    let (tr, va) = ds.split(0.25, 3);
+    assert_eq!((tr.n, va.n), (3, 1));
+    let b = batch_indices(10, 4, None);
+    assert_eq!(b.len(), 3);
+    assert_eq!(b[2].len(), 2);
+    assert!(Dataset::new(vec![0.0; 5], vec![2], vec![0, 1]).is_err());
+}
+
+#[test]
+fn synthetic_motif_planted() {
+    let (s, y) = synthetic_motif(20, 30, b"TATAAA", 5);
+    for (seq, label) in s.iter().zip(&y) {
+        let has = seq.windows(6).any(|w| w == b"TATAAA");
+        if *label == 1 { assert!(has); }
+    }
+    assert_eq!(y.iter().sum::<i64>(), 10);
+}
+
+#[test]
+fn metrics_values() {
+    assert_eq!(accuracy(&[0, 1, 1], &[0, 1, 0]), 2.0 / 3.0);
+    let cm = confusion_matrix(&[0, 1, 1, 0], &[0, 1, 0, 0], 2);
+    assert_eq!(cm, vec![2, 1, 0, 1]);
+    assert!(macro_f1(&cm, 2) > 0.7);
+    assert!((mcc_binary(&[5, 0, 0, 5]) - 1.0).abs() < 1e-9);
+    assert_eq!(auroc(&[0.1, 0.4, 0.35, 0.8], &[0, 0, 1, 1]), Some(0.75));
+    assert_eq!(auroc(&[0.5, 0.5], &[0, 1]), Some(0.5));
+    assert_eq!(auroc(&[0.5, 0.6], &[1, 1]), None);
+}
+
+#[test]
+fn positional_encoding_and_attn_mask() {
+    let pe = bio_flodl::encode::sinusoidal_positions(4, 4);
+    assert_eq!(pe.len(), 16);
+    assert_eq!(&pe[0..4], &[0.0, 1.0, 0.0, 1.0]); // position 0: sin 0, cos 0
+    let g = Graph::from_edges(3, false, &[(0, 1)]).unwrap();
+    let m = g.attention_mask();
+    assert_eq!(m[0], 0.0);      // self loop
+    assert_eq!(m[1], 0.0);      // edge 0-1
+    assert_eq!(m[2], -1e9);     // no edge 0-2
+}
+
+#[test]
+fn average_precision_and_fasta_and_graph_task() {
+    let ap = average_precision(&[0.1, 0.4, 0.35, 0.8], &[0, 0, 1, 1]).unwrap();
+    assert!((ap - 0.8333333).abs() < 1e-6);
+    assert_eq!(average_precision(&[0.9, 0.8], &[1, 1]), None);
+    assert!((average_precision(&[0.5, 0.5], &[0, 1]).unwrap() - 0.5).abs() < 1e-9);
+
+    let recs = bio_flodl::io::parse_fasta(">a desc\nacg\nT\n\n>b\nGG\n");
+    assert_eq!(recs.len(), 2);
+    assert_eq!(recs[0].1, b"ACGT");
+    assert_eq!(bio_flodl::io::fit_length(b"ACGT", 6), b"ACGTNN");
+    assert_eq!(bio_flodl::io::fit_length(b"AACGTT", 2), b"CG");
+
+    let ds = synthetic_graph_task(10, 9, 4, 3);
+    assert_eq!(ds.sample_shape, vec![9, 4]);
+    assert_eq!(ds.x.len(), 10 * 9 * 4);
+    // exactly one hot per node
+    assert!(ds.x.chunks(4).all(|c| c.iter().sum::<f32>() == 1.0));
+}

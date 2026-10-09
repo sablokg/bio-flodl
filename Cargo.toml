@@ -1,0 +1,52 @@
+[package]
+name = "bio-flodl"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Bioinformatics data layer for flodl: sequence encoding, one-hot, k-mers, graphs and adjacency matrices"
+license = "MIT"
+keywords = ["bioinformatics", "deep-learning", "flodl", "graph", "one-hot"]
+
+[features]
+default = []
+# Enables the tensor bridge and model builders (requires libtorch, see flodl docs).
+flodl = ["dep:flodl"]
+
+[dependencies]
+flodl = { version = "0.8", optional = true }
+
+[[example]]
+name = "motif_cnn"
+required-features = ["flodl"]
+
+[[example]]
+name = "dilated_cnn"
+required-features = ["flodl"]
+
+[[example]]
+name = "birnn"
+required-features = ["flodl"]
+
+[[example]]
+name = "transformer"
+required-features = ["flodl"]
+
+[[example]]
+name = "gcn_graph"
+required-features = ["flodl"]
+
+[[example]]
+name = "gat_graph"
+required-features = ["flodl"]
+
+[[example]]
+name = "compose_sequential"
+required-features = ["flodl"]
+
+[[example]]
+name = "tf_binding"
+required-features = ["flodl"]
+
+[[example]]
+name = "bench_models"
+required-features = ["flodl"]
