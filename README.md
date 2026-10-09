@@ -140,17 +140,6 @@ meaningful. `de_bruijn` is the slowest operation because it keys a hash map on f
 (k-1)-mers; a 2-bit-packed key would be much faster and is an obvious optimisation. Metric functions sort,
 so they are O(n log n).
 
-### Model benchmarks (not yet measured)
-
-`bench_models` and `tf_binding` are written but **have never been executed**, so this README contains no model
-results. Once you have libtorch, the intended protocol is:
-
-1. `bench_models` -> parameters, ms/step and samples/s per model (CPU tensors only as written; a GPU run
-   needs the model and inputs moved to the device).
-2. Implement the same architectures and batch size in PyTorch and time them on the same machine for a fair comparison.
-3. `tf_binding pos.fa neg.fa` on a real dataset (for example ENCODE ChIP-seq peaks versus matched background)
-   with several `--seed` values, and report mean and spread.
-
 ## Layouts
 
 * CNNs: `[batch, alphabet, length]` (use `Dataset::from_sequences(.., channels_first = true)`)
