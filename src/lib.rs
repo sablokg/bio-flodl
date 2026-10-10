@@ -20,6 +20,7 @@ pub mod data;
 pub mod encode;
 pub mod graph;
 pub mod io;
+pub mod motif;
 
 /*
 Gaurav Sablok

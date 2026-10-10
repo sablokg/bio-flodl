@@ -98,3 +98,4 @@ impl Optimizer for Adam { fn step(&mut self) -> Result<()> { todo!() } fn zero_g
 pub fn cross_entropy_loss(pred: &Variable, target: &Variable) -> Result<Variable> { todo!() }
 pub fn clip_grad_norm(params: &[Parameter], max_norm: f64) -> Result<f64> { todo!() }
 pub fn gpu_available() -> bool { todo!() }
+pub fn manual_seed(seed: u64) {}

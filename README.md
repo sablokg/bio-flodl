@@ -6,8 +6,8 @@ Bioinformatics data layer **and model zoo** for [flodl](https://docs.rs/flodl) (
 
 | Area | Contents | Verified |
 |---|---|---|
-| Core (pure Rust, no libtorch) | FASTA parsing and fixed-length cropping/padding; DNA/RNA/protein alphabets; one-hot (strict/lenient/labels/batch+mask, channels-first); k-mers; reverse complement; graphs, dense/GCN-normalised/row-normalised adjacency, Laplacian, attention mask, contact maps, de Bruijn; datasets, batching, seeded RNG, accuracy / confusion matrix / macro-F1 / MCC / AUROC / AUPRC, ROC and PR curve points; synthetic motif and graph tasks; sinusoidal positions | 17 tests pass |
-| `models::cnn` | `MotifCnn` (parallel multi-width Conv1d motif scanners, global max-pool, filter extraction), `DilatedResCnn` (residual dilated Conv1d, exponential receptive field) | tested, CPU + GPU |
+| Core (pure Rust, no libtorch) | FASTA parsing and fixed-length cropping/padding; DNA/RNA/protein alphabets; one-hot (strict/lenient/labels/batch+mask, channels-first); k-mers; reverse complement; graphs, dense/GCN-normalised/row-normalised adjacency, Laplacian, attention mask, contact maps, de Bruijn; datasets, batching, seeded RNG, accuracy / confusion matrix / macro-F1 / MCC / AUROC / AUPRC, ROC and PR curve points; motifs from convolutional filters (frequency matrices, MEME files for TOMTOM); synthetic motif and graph tasks; sinusoidal positions | 18 tests pass |
+| `models::cnn` | `MotifCnn` (parallel multi-width Conv1d motif scanners, global max-pool, filter extraction, activation scans), `DilatedResCnn` (residual dilated Conv1d, exponential receptive field) | tested, CPU + GPU |
 | `models::rnn` | `BiRnnClassifier` (bidirectional LSTM or GRU) | tested, CPU + GPU |
 | `models::transformer` | `TransformerClassifier` (pre-LN encoder, MHA, sinusoidal positions, optional attention mask) | tested, CPU + GPU |
 | `models::gnn` | `GcnLayer`/`GcnNet`, `GatLayer`/`GatNet` (multi-head, dense), node or graph-mean readout | tested, CPU + GPU |

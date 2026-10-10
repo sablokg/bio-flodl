@@ -47,6 +47,20 @@ impl MotifCnn {
     pub fn motif_filters(&self, i: usize) -> Option<Variable> {
         self.convs.get(i).map(|c| c.weight.variable.clone())
     }
+
+    /// Number of parallel scanners, one per kernel size.
+    pub fn scanners(&self) -> usize {
+        self.convs.len()
+    }
+
+    /// Activations of scanner `i` on `x` (`[batch, alphabet, length]`): `relu(conv(x))`,
+    /// shape `[batch, filters, length - kernel + 1]`. Fed to
+    /// [`crate::motif::pfms_from_activations`], they turn each filter into a motif.
+    pub fn scan(&self, i: usize, x: &Variable) -> Option<flodl::Result<Variable>> {
+        self.convs
+            .get(i)
+            .map(|c| c.forward(x).and_then(|h| h.relu()))
+    }
 }
 
 impl Module for MotifCnn {

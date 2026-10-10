@@ -185,6 +185,43 @@ fn fit_with_reports_every_epoch() -> Result<()> {
 }
 
 #[test]
+fn motif_cnn_filters_recover_the_planted_motif() -> Result<()> {
+    use bio_flodl::motif::pfms_from_activations;
+    manual_seed(1);
+    let (seqs, labels) = synthetic_motif(2000, 50, b"TATAAA", 7);
+    let refs: Vec<&[u8]> = seqs.iter().map(|s| s.as_slice()).collect();
+    let (train, val) = Dataset::from_sequences(&refs, &labels, &Alphabet::DNA, 50, true)
+        .unwrap()
+        .split(0.2, 1);
+    let model = MotifCnn::new(&MotifCnnConfig {
+        in_channels: 4,
+        filters: 8,
+        kernel_sizes: vec![8],
+        dropout: 0.0,
+        classes: 2,
+    })?;
+    let cfg = TrainConfig {
+        epochs: 10,
+        verbose: false,
+        ..Default::default()
+    };
+    fit(&model, &mut adam(&model, 1e-2), &train, None, &cfg)?;
+
+    let x = Variable::new(
+        Tensor::from_f32(&val.x, &[val.n as i64, 4, 50], Device::CPU)?,
+        false,
+    );
+    let acts = model.scan(0, &x).unwrap()?.data().to_f32_vec()?;
+    let pfms = pfms_from_activations(&val.x, val.n, 4, 50, &acts, 8, 8, 0.5);
+    let consensus: Vec<String> = pfms.iter().map(|p| p.consensus(b"ACGT")).collect();
+    assert!(
+        consensus.iter().any(|c| c.contains("TATAAA")),
+        "no filter learned TATAAA: {consensus:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn models_train_on_cpu() -> Result<()> {
     train_every_model(Device::CPU)
 }
