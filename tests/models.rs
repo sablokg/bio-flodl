@@ -3,11 +3,9 @@
 //! `cargo test --features cuda --test models -- --ignored`.
 #![cfg(feature = "flodl")]
 
-use bio_flodl::alphabet::Alphabet;
-use bio_flodl::bridge::{attention_mask_variable, gcn_adjacency_variable};
-use bio_flodl::data::{synthetic_graph_task, synthetic_motif, Dataset};
-use bio_flodl::graph::chain;
-use bio_flodl::prelude::*;
+use flodl_bio::alphabet::Alphabet;
+use flodl_bio::data::{synthetic_motif, Dataset};
+use flodl_bio::prelude::*;
 
 fn motif_data(channels_first: bool) -> (Dataset, Dataset) {
     let (seqs, labels) = synthetic_motif(200, 50, b"TATAAA", 7);
@@ -78,30 +76,6 @@ fn train_every_model(dev: Device) -> Result<()> {
     let gru = BiRnnClassifier::new(RnnKind::Gru, 4, 8, 1, 0.0, 2)?;
     let mlp = FlatMlp::new(50 * 4, &[16], 2, 0.0)?;
     for model in [&transformer as &dyn Module, &lstm, &gru, &mlp] {
-        train_on(model, dev, &train, &val)?;
-    }
-
-    let g = chain(12);
-    let (train, val) = synthetic_graph_task(200, 12, 4, 3).split(0.2, 1);
-    let gcn = GcnNet::new(
-        gcn_adjacency_variable(&g)?,
-        4,
-        16,
-        2,
-        2,
-        0.0,
-        Readout::GraphMean,
-    )?;
-    let gat = GatNet::new(
-        attention_mask_variable(&g)?,
-        4,
-        8,
-        2,
-        2,
-        0.0,
-        Readout::GraphMean,
-    )?;
-    for model in [&gcn as &dyn Module, &gat] {
         train_on(model, dev, &train, &val)?;
     }
     Ok(())
@@ -186,7 +160,7 @@ fn fit_with_reports_every_epoch() -> Result<()> {
 
 #[test]
 fn motif_cnn_filters_recover_the_planted_motif() -> Result<()> {
-    use bio_flodl::motif::pfms_from_activations;
+    use flodl_bio::motif::pfms_from_activations;
     manual_seed(1);
     let (seqs, labels) = synthetic_motif(2000, 50, b"TATAAA", 7);
     let refs: Vec<&[u8]> = seqs.iter().map(|s| s.as_slice()).collect();

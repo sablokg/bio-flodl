@@ -1,4 +1,4 @@
-use bio_flodl::{alphabet::*, encode::*, graph::*};
+use flodl_bio::{alphabet::*, encode::*, graph::*};
 
 #[test]
 fn one_hot_dna() {
@@ -80,7 +80,7 @@ fn de_bruijn_graph() {
     assert_eq!(g.edges.len(), 3);
 }
 
-use bio_flodl::data::*;
+use flodl_bio::data::*;
 
 #[test]
 fn rng_is_reproducible_and_shuffles() {
@@ -132,7 +132,7 @@ fn metrics_values() {
 
 #[test]
 fn positional_encoding_and_attn_mask() {
-    let pe = bio_flodl::encode::sinusoidal_positions(4, 4);
+    let pe = flodl_bio::encode::sinusoidal_positions(4, 4);
     assert_eq!(pe.len(), 16);
     assert_eq!(&pe[0..4], &[0.0, 1.0, 0.0, 1.0]); // position 0: sin 0, cos 0
     let g = Graph::from_edges(3, false, &[(0, 1)]).unwrap();
@@ -149,11 +149,11 @@ fn average_precision_and_fasta_and_graph_task() {
     assert_eq!(average_precision(&[0.9, 0.8], &[1, 1]), None);
     assert!((average_precision(&[0.5, 0.5], &[0, 1]).unwrap() - 0.5).abs() < 1e-9);
 
-    let recs = bio_flodl::io::parse_fasta(">a desc\nacg\nT\n\n>b\nGG\n");
+    let recs = flodl_bio::io::parse_fasta(">a desc\nacg\nT\n\n>b\nGG\n");
     assert_eq!(recs.len(), 2);
     assert_eq!(recs[0].1, b"ACGT");
-    assert_eq!(bio_flodl::io::fit_length(b"ACGT", 6), b"ACGTNN");
-    assert_eq!(bio_flodl::io::fit_length(b"AACGTT", 2), b"CG");
+    assert_eq!(flodl_bio::io::fit_length(b"ACGT", 6), b"ACGTNN");
+    assert_eq!(flodl_bio::io::fit_length(b"AACGTT", 2), b"CG");
 
     let ds = synthetic_graph_task(10, 9, 4, 3);
     assert_eq!(ds.sample_shape, vec![9, 4]);
@@ -192,7 +192,7 @@ fn curves_match_their_summary_metrics() {
 
 #[test]
 fn motif_pfms_background_and_meme() {
-    use bio_flodl::motif::{background, pfms_from_activations, write_meme};
+    use flodl_bio::motif::{background, pfms_from_activations, write_meme};
     let seqs: [&[u8]; 3] = [b"ACGTTT", b"TTACGG", b"GGGTAC"];
     let x = one_hot_batch(&seqs, &Alphabet::DNA, None).channels_first();
     let (n, alphabet, len, width, filters) = (3, 4, 6, 2, 2);

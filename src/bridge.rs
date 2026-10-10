@@ -2,7 +2,6 @@
 //! All tensors are created on the CPU; move models/inputs with `move_to_device` / `to_device`.
 
 use crate::encode::{Batch, OneHot};
-use crate::graph::Graph;
 use flodl::{Device, Tensor, Variable};
 
 /*
@@ -41,19 +40,4 @@ pub fn batch_to_variable_channels_first(b: &Batch) -> flodl::Result<Variable> {
         &b.channels_first(),
         &[b.n as i64, b.width as i64, b.len as i64],
     )
-}
-
-/// Dense adjacency `[n, n]`.
-pub fn adjacency_variable(g: &Graph) -> flodl::Result<Variable> {
-    variable_f32(&g.adjacency(), &[g.n as i64, g.n as i64])
-}
-
-/// `D^-1/2 (A+I) D^-1/2` as `[n, n]`, ready for [`crate::models::gnn::GcnNet`].
-pub fn gcn_adjacency_variable(g: &Graph) -> flodl::Result<Variable> {
-    variable_f32(&g.gcn_normalized(), &[g.n as i64, g.n as i64])
-}
-
-/// Additive attention mask `[n, n]` for [`crate::models::gnn::GatNet`].
-pub fn attention_mask_variable(g: &Graph) -> flodl::Result<Variable> {
-    variable_f32(&g.attention_mask(), &[g.n as i64, g.n as i64])
 }

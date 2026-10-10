@@ -2,8 +2,8 @@
 //! `cargo run --release --features flodl --example motif_cnn` (needs libtorch)
 
 mod common;
-use bio_flodl::models::cnn::{MotifCnn, MotifCnnConfig};
-use bio_flodl::train::{adam, fit, report, TrainConfig};
+use flodl_bio::models::cnn::{MotifCnn, MotifCnnConfig};
+use flodl_bio::train::{adam, fit, report, TrainConfig};
 
 fn main() -> flodl::Result<()> {
     let (train, val) = common::motif_task(2000, 100, true, 42);

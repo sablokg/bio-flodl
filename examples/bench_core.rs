@@ -1,10 +1,10 @@
 //! Throughput of the pure-Rust data layer. No libtorch needed.
 //! Run in release mode: `cargo run --release --example bench_core [-- --scale 1.0]`
 
-use bio_flodl::alphabet::Alphabet;
-use bio_flodl::data::*;
-use bio_flodl::encode::*;
-use bio_flodl::graph::*;
+use flodl_bio::alphabet::Alphabet;
+use flodl_bio::data::*;
+use flodl_bio::encode::*;
+use flodl_bio::graph::*;
 use std::hint::black_box;
 use std::time::Instant;
 
@@ -25,7 +25,7 @@ fn main() {
     let mut rng = Rng::new(1);
     let reps = 5;
 
-    println!("bio-flodl core benchmark (best of {reps}, scale {scale})\n");
+    println!("flodl-bio core benchmark (best of {reps}, scale {scale})\n");
     println!("| {:<44} | {:>13} | {:>22} |", "operation", "time", "throughput");
     println!("|{:-<46}|{:-<15}|{:-<24}|", "", "", "");
 
@@ -48,7 +48,7 @@ fn main() {
         black_box(kmer_counts(&genome, 6, &Alphabet::DNA).unwrap());
     }));
     row(&format!("reverse_complement ({} bp)", genome.len()), genome.len() as f64, "bases", time(reps, || {
-        black_box(bio_flodl::alphabet::reverse_complement(&genome));
+        black_box(flodl_bio::alphabet::reverse_complement(&genome));
     }));
 
     // --- graphs

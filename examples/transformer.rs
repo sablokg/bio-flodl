@@ -2,8 +2,8 @@
 //! `cargo run --release --features flodl --example transformer`
 
 mod common;
-use bio_flodl::models::transformer::{TransformerClassifier, TransformerConfig};
-use bio_flodl::train::{adam, fit, report, TrainConfig};
+use flodl_bio::models::transformer::{TransformerClassifier, TransformerConfig};
+use flodl_bio::train::{adam, fit, report, TrainConfig};
 
 fn main() -> flodl::Result<()> {
     let (train, val) = common::motif_task(2000, 100, false, 42);

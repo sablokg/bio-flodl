@@ -2,8 +2,8 @@
 //! `cargo run --release --features flodl --example birnn`
 
 mod common;
-use bio_flodl::models::rnn::{BiRnnClassifier, RnnKind};
-use bio_flodl::train::{adam, fit, report, TrainConfig};
+use flodl_bio::models::rnn::{BiRnnClassifier, RnnKind};
+use flodl_bio::train::{adam, fit, report, TrainConfig};
 
 fn main() -> flodl::Result<()> {
     let (train, val) = common::motif_task(2000, 60, false, 42); // [L, 4] layout

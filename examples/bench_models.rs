@@ -1,19 +1,17 @@
 //! Training and inference throughput of every bundled model (CPU tensors).
-//!   cargo run --release --features flodl --example bench_models -- [--batch 64] [--len 200] [--steps 20] [--nodes 64]
+//!   cargo run --release --features flodl --example bench_models -- [--batch 64] [--len 200] [--steps 20]
 //!
 //! Reports ms per training step (forward + loss + backward + Adam step), ms per forward pass in eval
 //! mode, samples/s, and parameter count. Compare against a PyTorch reference of the same architecture
 //! and batch size on the same machine for the "throughput" row of the evaluation.
 
-use bio_flodl::bridge::{attention_mask_variable, gcn_adjacency_variable, labels_variable};
-use bio_flodl::data::Rng;
-use bio_flodl::graph::Graph;
-use bio_flodl::models::cnn::*;
-use bio_flodl::models::gnn::*;
-use bio_flodl::models::mlp::FlatMlp;
-use bio_flodl::models::rnn::{BiRnnClassifier, RnnKind};
-use bio_flodl::models::transformer::{TransformerClassifier, TransformerConfig};
-use bio_flodl::train::adam;
+use flodl_bio::bridge::labels_variable;
+use flodl_bio::data::Rng;
+use flodl_bio::models::cnn::*;
+use flodl_bio::models::mlp::FlatMlp;
+use flodl_bio::models::rnn::{BiRnnClassifier, RnnKind};
+use flodl_bio::models::transformer::{TransformerClassifier, TransformerConfig};
+use flodl_bio::train::adam;
 use flodl::{cross_entropy_loss, Module, Optimizer, Tensor, Variable};
 use std::time::Instant;
 
@@ -54,12 +52,12 @@ fn bench<M: Module>(name: &str, model: &M, x: &Variable, y: &Variable, batch: us
 }
 
 fn main() -> flodl::Result<()> {
-    let (b, l, steps, nodes) = (arg("--batch", 64), arg("--len", 200), arg("--steps", 20), arg("--nodes", 64));
-    let (bi, li, ni) = (b as i64, l as i64, nodes as i64);
+    let (b, l, steps) = (arg("--batch", 64), arg("--len", 200), arg("--steps", 20));
+    let (bi, li) = (b as i64, l as i64);
     let mut rng = Rng::new(1);
     let labels: Vec<i64> = (0..b).map(|_| rng.below(2) as i64).collect();
     let y = labels_variable(&labels)?;
-    println!("batch {b}, sequence length {l}, graph nodes {nodes}, {steps} timed steps, CPU\n");
+    println!("batch {b}, sequence length {l}, {steps} timed steps, CPU\n");
 
     let x_cf = randn(&[bi, 4, li])?; // [B, 4, L]
     let x_cl = randn(&[bi, li, 4])?; // [B, L, 4]
@@ -71,13 +69,6 @@ fn main() -> flodl::Result<()> {
     rows.push(bench("BiGRU (hidden 64)", &BiRnnClassifier::new(RnnKind::Gru, 4, 64, 1, 0.3, 2)?, &x_cl, &y, b, steps)?);
     rows.push(bench("Transformer (d64, 4 heads, 2 layers)", &TransformerClassifier::new(&TransformerConfig { alphabet: 4, d_model: 64, heads: 4, layers: 2, d_ff: 128, max_len: l, dropout: 0.1, classes: 2 })?, &x_cl, &y, b, steps)?);
     rows.push(bench("FlatMlp (2 x 256)", &FlatMlp::new(4 * li, &[256, 256], 2, 0.3)?, &x_cl, &y, b, steps)?);
-
-    // graphs: a ring plus random chords, features [B, N, 16]
-    let mut g = Graph::new(nodes, false);
-    for i in 0..nodes { g.add_edge(i, (i + 1) % nodes, 1.0).unwrap(); g.add_edge(i, rng.below(nodes), 1.0).unwrap(); }
-    let x_g = randn(&[bi, ni, 16])?;
-    rows.push(bench("GcnNet (2 layers, 64 hidden)", &GcnNet::new(gcn_adjacency_variable(&g)?, 16, 64, 2, 2, 0.1, Readout::GraphMean)?, &x_g, &y, b, steps)?);
-    rows.push(bench("GatNet (4 heads x 16)", &GatNet::new(attention_mask_variable(&g)?, 16, 16, 4, 2, 0.1, Readout::GraphMean)?, &x_g, &y, b, steps)?);
 
     println!("| model | parameters | train ms/step | train samples/s | infer ms/batch | infer samples/s |");
     println!("|---|---|---|---|---|---|");

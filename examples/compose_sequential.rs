@@ -5,7 +5,7 @@
 //! `cargo run --release --features flodl --example compose_sequential`
 
 mod common;
-use bio_flodl::prelude::*;
+use flodl_bio::prelude::*;
 
 fn main() -> flodl::Result<()> {
     let (train_set, val) = common::motif_task(2000, 100, true, 42);

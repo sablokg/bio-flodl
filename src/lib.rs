@@ -1,4 +1,4 @@
-//! # bio-flodl
+//! # flodl-bio
 //!
 //! Bioinformatics data layer for [flodl](https://docs.rs/flodl).
 //!
@@ -9,7 +9,7 @@
 //! * [`io`]       – FASTA parsing, fixed-length cropping/padding
 //! * [`data`]     – datasets, batching, seeded RNG, metrics (accuracy, F1, MCC, AUROC)
 //! * `bridge` (feature `flodl`) – conversion to flodl tensors
-//! * `models` (feature `flodl`) – motif CNNs, BiLSTM/BiGRU, Transformer, GCN, GAT
+//! * `models` (feature `flodl`) – motif CNNs, BiLSTM/BiGRU, Transformer
 //! * `train` (feature `flodl`) – training / evaluation loops
 //! * `prelude` (feature `flodl`) – all of flodl + everything above in one import
 //!
@@ -63,7 +63,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// One import for everything: **all of flodl** (layers, losses, optimizers, schedulers, tensors,
 /// graph builder, data loaders, ...) plus this crate's models, containers and training loop.
 ///
-/// Names defined by bio-flodl take precedence over flodl's on collision (they are explicit
+/// Names defined by flodl-bio take precedence over flodl's on collision (they are explicit
 /// re-exports; flodl's come through the glob).
 #[cfg(feature = "flodl")]
 pub mod prelude {
@@ -71,7 +71,6 @@ pub mod prelude {
 
     pub use crate::models::cnn::{DilatedCnnConfig, DilatedResCnn, MotifCnn, MotifCnnConfig};
     pub use crate::models::compose::{ConcatBranches, Lambda, Residual, Sequential};
-    pub use crate::models::gnn::{GatLayer, GatNet, GcnLayer, GcnNet, Readout};
     pub use crate::models::mlp::FlatMlp;
     pub use crate::models::rnn::{BiRnnClassifier, RnnKind};
     pub use crate::models::transformer::{EncoderLayer, TransformerClassifier, TransformerConfig};

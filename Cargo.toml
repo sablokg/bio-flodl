@@ -1,5 +1,5 @@
 [package]
-name = "bio-flodl"
+name = "flodl-bio"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.75"
@@ -31,14 +31,6 @@ required-features = ["flodl"]
 
 [[example]]
 name = "transformer"
-required-features = ["flodl"]
-
-[[example]]
-name = "gcn_graph"
-required-features = ["flodl"]
-
-[[example]]
-name = "gat_graph"
 required-features = ["flodl"]
 
 [[example]]
