@@ -75,6 +75,7 @@ pub mod prelude {
     pub use crate::models::rnn::{BiRnnClassifier, RnnKind};
     pub use crate::models::transformer::{EncoderLayer, TransformerClassifier, TransformerConfig};
     pub use crate::train::{
-        adam, evaluate, fit, predict_proba, predict_probs, report, EpochStats, Report, TrainConfig,
+        adam, evaluate, fit, fit_with, predict_proba, predict_probs, report, EpochStats, Report,
+        TrainConfig,
     };
 }

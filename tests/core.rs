@@ -161,3 +161,31 @@ fn average_precision_and_fasta_and_graph_task() {
     // exactly one hot per node
     assert!(ds.x.chunks(4).all(|c| c.iter().sum::<f32>() == 1.0));
 }
+
+#[test]
+fn curves_match_their_summary_metrics() {
+    // Ties with mixed labels (0.4) and same labels (0.35) exercise the grouping.
+    let scores = [0.1, 0.4, 0.35, 0.8, 0.4, 0.9, 0.2, 0.35];
+    let labels = [0, 0, 1, 1, 1, 0, 0, 1];
+
+    let roc = roc_curve(&scores, &labels).unwrap();
+    assert_eq!(roc.first(), Some(&(0.0, 0.0)));
+    assert_eq!(roc.last(), Some(&(1.0, 1.0)));
+    let area: f64 = roc
+        .windows(2)
+        .map(|w| (w[1].0 - w[0].0) * (w[1].1 + w[0].1) / 2.0)
+        .sum();
+    assert!((area - auroc(&scores, &labels).unwrap()).abs() < 1e-12);
+
+    let pr = pr_curve(&scores, &labels).unwrap();
+    assert_eq!(pr.last().unwrap().0, 1.0);
+    let (mut prev, mut steps) = (0.0, 0.0);
+    for &(recall, precision) in &pr {
+        steps += (recall - prev) * precision;
+        prev = recall;
+    }
+    assert!((steps - average_precision(&scores, &labels).unwrap()).abs() < 1e-12);
+
+    assert!(roc_curve(&[0.5, 0.6], &[1, 1]).is_none());
+    assert!(pr_curve(&[0.5, 0.6], &[0, 0]).is_none());
+}
