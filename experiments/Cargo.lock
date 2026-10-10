@@ -31,21 +31,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bio-flodl"
-version = "0.1.0"
-dependencies = [
- "flodl",
-]
-
-[[package]]
-name = "bio-flodl-experiments"
-version = "0.1.0"
-dependencies = [
- "bio-flodl",
- "serde_json",
-]
-
-[[package]]
 name = "cc"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -128,6 +113,21 @@ dependencies = [
  "libc",
  "rand",
  "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "flodl-bio"
+version = "0.1.0"
+dependencies = [
+ "flodl",
+]
+
+[[package]]
+name = "flodl-bio-experiments"
+version = "0.1.0"
+dependencies = [
+ "flodl-bio",
  "serde_json",
 ]
 

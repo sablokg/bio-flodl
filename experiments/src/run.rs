@@ -1,7 +1,9 @@
 //! One training run: seed, train with a flodl Monitor, then write every artifact of the run.
 
-use bio_flodl::data::{pr_curve, roc_curve, Dataset};
-use bio_flodl::prelude::*;
+use flodl_bio::alphabet::Alphabet;
+use flodl_bio::data::{pr_curve, roc_curve, Dataset};
+use flodl_bio::motif::{background, pfms_from_activations, write_meme};
+use flodl_bio::prelude::*;
 use serde_json::json;
 use std::error::Error;
 use std::fmt::Write as _;
@@ -155,7 +157,7 @@ pub fn run(model: &dyn Module, spec: &RunSpec) -> Res<RunResult> {
 
     let mut record = meta;
     record["hardware"] = json!(hardware_summary());
-    record["bio_flodl_commit"] = json!(git_commit());
+    record["flodl_bio_commit"] = json!(git_commit());
     record["result"] = json!({
         "accuracy": result.accuracy,
         "macro_f1": result.macro_f1,
@@ -183,7 +185,7 @@ fn write_points(path: &Path, header: &str, points: Option<Vec<(f64, f64)>>) -> R
     Ok(())
 }
 
-/// Commit of the bio-flodl checkout the harness was built from, suffixed `-dirty` when the
+/// Commit of the flodl-bio checkout the harness was built from, suffixed `-dirty` when the
 /// tree had uncommitted changes, when git can tell.
 fn git_commit() -> Option<String> {
     let out = std::process::Command::new("git")
@@ -194,4 +196,42 @@ fn git_commit() -> Option<String> {
     out.status
         .success()
         .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// The trained MotifCnn's filters as motifs (the DeepBind / Basset convention of
+/// `flodl_bio::motif`), scanned over `eval`, in `filters.meme`: one motif per filter, named
+/// `w<width>_f<index>`, with the background measured from `eval`.
+pub fn write_filters(model: &MotifCnn, eval: &Dataset, dir: &Path) -> Res<()> {
+    let (n, alphabet, len) = (eval.n, eval.sample_shape[0], eval.sample_shape[1]);
+    let device = model
+        .parameters()
+        .first()
+        .map_or(Device::CPU, |p| p.variable.device());
+    let shape = [n as i64, alphabet as i64, len as i64];
+    let x = Variable::new(Tensor::from_f32(&eval.x, &shape, device)?, false);
+    let mut motifs = Vec::new();
+    no_grad(|| -> Res<()> {
+        for i in 0..model.scanners() {
+            let width = model.motif_filters(i).ok_or("no such scanner")?.shape()[2] as usize;
+            let acts = model
+                .scan(i, &x)
+                .ok_or("no such scanner")??
+                .data()
+                .to_f32_vec()?;
+            let filters = acts.len() / (n * (len + 1 - width));
+            let pfms = pfms_from_activations(&eval.x, n, alphabet, len, &acts, filters, width, 0.5);
+            motifs.extend(
+                pfms.into_iter()
+                    .enumerate()
+                    .map(|(f, pfm)| (format!("w{width}_f{f}"), pfm)),
+            );
+        }
+        Ok(())
+    })?;
+    let bg = background(&eval.x, n, alphabet, len);
+    fs::write(
+        dir.join("filters.meme"),
+        write_meme(&motifs, Alphabet::DNA.symbols(), &bg),
+    )?;
+    Ok(())
 }

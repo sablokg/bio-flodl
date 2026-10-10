@@ -1,13 +1,13 @@
-//! Reproduces the evaluation of the bio-flodl application note. See README.md.
+//! Reproduces the evaluation of the flodl-bio application note. See README.md.
 //!
 //! Every run executes in its own process (the sweep re-invokes this binary with `run-one`),
 //! so process memory and GPU peak statistics belong to that run alone.
 
 mod run;
 
-use bio_flodl::alphabet::Alphabet;
-use bio_flodl::data::{synthetic_motif, Dataset};
-use bio_flodl::prelude::*;
+use flodl_bio::alphabet::Alphabet;
+use flodl_bio::data::{synthetic_motif, Dataset};
+use flodl_bio::prelude::*;
 use run::{device_label, Res, RunSpec};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const USAGE: &str = "\
-usage: bio-flodl-experiments <motif|gue> [options]
+usage: flodl-bio-experiments <motif|gue> [options]
 
   motif    planted-motif task: random DNA, positives carry TATAAA
   gue      GUE human transcription-factor binding (DNABERT-2 benchmark, 5 ENCODE ChIP-seq
@@ -152,9 +152,24 @@ fn channels_first(name: &str) -> bool {
     matches!(name, "motif" | "dilated")
 }
 
+/// A built model. MotifCnn stays concrete so its filters can be exported after training.
+enum Built {
+    Motif(MotifCnn),
+    Other(Box<dyn Module>),
+}
+
+impl Built {
+    fn module(&self) -> &dyn Module {
+        match self {
+            Built::Motif(m) => m,
+            Built::Other(m) => m.as_ref(),
+        }
+    }
+}
+
 /// Builds model `name` for sequences of `len` bases, with its learning rate (those of
 /// `examples/tf_binding.rs`).
-fn build(name: &str, len: usize) -> Res<(Box<dyn Module>, f64)> {
+fn build(name: &str, len: usize) -> Res<(Built, f64)> {
     let transformer = |alphabet| TransformerConfig {
         alphabet,
         d_model: 64,
@@ -165,17 +180,17 @@ fn build(name: &str, len: usize) -> Res<(Box<dyn Module>, f64)> {
         dropout: 0.1,
         classes: 2,
     };
-    let built: (Box<dyn Module>, f64) = match name {
-        "motif" => (
-            Box::new(MotifCnn::new(&MotifCnnConfig {
-                in_channels: 4,
-                filters: 64,
-                kernel_sizes: vec![8, 12, 16],
-                dropout: 0.3,
-                classes: 2,
-            })?),
-            1e-3,
-        ),
+    if name == "motif" {
+        let motif = MotifCnn::new(&MotifCnnConfig {
+            in_channels: 4,
+            filters: 64,
+            kernel_sizes: vec![8, 12, 16],
+            dropout: 0.3,
+            classes: 2,
+        })?;
+        return Ok((Built::Motif(motif), 1e-3));
+    }
+    let (model, lr): (Box<dyn Module>, f64) = match name {
         "dilated" => (
             Box::new(DilatedResCnn::new(&DilatedCnnConfig {
                 in_channels: 4,
@@ -214,7 +229,7 @@ fn build(name: &str, len: usize) -> Res<(Box<dyn Module>, f64)> {
         ),
         other => return Err(format!("unknown model {other}").into()),
     };
-    Ok(built)
+    Ok((Built::Other(model), lr))
 }
 
 /// One dataset of a task: its name (the output directory) and, for GUE, its index.
@@ -338,7 +353,10 @@ fn run_one(a: &Args) -> Res<()> {
         test: data.test.as_ref(),
         dir: run_dir(a, &cell.name, model_name, &device_label(device), seed),
     };
-    let r = run::run(model.as_ref(), &spec)?;
+    let r = run::run(model.module(), &spec)?;
+    if let Built::Motif(motif) = &model {
+        run::write_filters(motif, data.test.as_ref().unwrap_or(&data.val), &spec.dir)?;
+    }
     println!(
         "{} {model_name} {} seed {seed}: accuracy {:.4}  MCC {:.4}  AUROC {:.4}  AUPRC {:.4}  {:.2} s/epoch",
         cell.name, r.device, r.accuracy, r.mcc, r.auroc, r.auprc, r.secs_per_epoch

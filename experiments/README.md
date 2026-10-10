@@ -1,7 +1,7 @@
-# bio-flodl experiments
+# flodl-bio experiments
 
-Reproduces the evaluation of the bio-flodl application note. A separate crate (not published,
-not part of the `bio-flodl` package) so the library carries no experiment dependencies.
+Reproduces the evaluation of the flodl-bio application note. A separate crate (not published,
+not part of the `flodl-bio` package) so the library carries no experiment dependencies.
 
 ```
 cargo run --release -- gue --data <dir>/GUE --seeds 5                     # CPU
@@ -49,7 +49,8 @@ runs/<dataset>/       gue-tf-0 to gue-tf-4, or motif-n<N>-len<L>
     predictions.csv per evaluated sample: label and positive-class probability
     roc.csv         ROC curve points (fpr, tpr)
     pr.csv          precision-recall curve points (recall, precision)
-    run.json        seed, configuration, hardware, bio-flodl commit and results
+    filters.meme    MotifCnn only: each learned filter as a motif (MEME format, for TOMTOM)
+    run.json        seed, configuration, hardware, flodl-bio commit and results
 ```
 
 ## Reading the numbers
