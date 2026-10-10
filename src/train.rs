@@ -2,8 +2,9 @@
 //!
 //! Works with any `flodl::Module` and any `flodl::Optimizer` (Adam, AdamW, SGD, ...).
 //! Targets are class indices; the loss is `cross_entropy_loss` on raw logits.
+//! Batches are built on the device of the model's parameters, so calling
+//! `model.move_to_device(...)` before training is all a GPU run needs.
 
-use crate::bridge::{labels_variable, variable_f32};
 use crate::data::{
     auroc, average_precision, batch_indices, confusion_matrix, macro_f1, mcc_binary, Dataset, Rng,
 };
@@ -58,26 +59,35 @@ pub fn adam<M: Module + ?Sized>(model: &M, lr: f64) -> Adam {
     Adam::new(&model.parameters(), lr)
 }
 
-fn batch_inputs(data: &Dataset, idx: &[usize]) -> flodl::Result<(Variable, Variable, Vec<i64>)> {
+/// Device of the model's first parameter, CPU for a parameter-free model.
+fn model_device<M: Module + ?Sized>(model: &M) -> Device {
+    model
+        .parameters()
+        .first()
+        .map_or(Device::CPU, |p| p.variable.device())
+}
+
+/// Inputs and class-index targets for the samples `idx`, created on `device`.
+fn batch_inputs(
+    data: &Dataset,
+    idx: &[usize],
+    device: Device,
+) -> flodl::Result<(Variable, Variable)> {
     let (x, y) = data.batch(idx);
     let mut shape = vec![idx.len() as i64];
     shape.extend(data.sample_shape.iter().map(|&d| d as i64));
-    Ok((variable_f32(&x, &shape)?, labels_variable(&y)?, y))
+    let x = Variable::new(Tensor::from_f32(&x, &shape, device)?, false);
+    let t = Variable::new(Tensor::from_i64(&y, &[y.len() as i64], device)?, false);
+    Ok((x, t))
 }
 
-/// Number of rows whose true-class logit equals the row maximum (ties count as correct).
-/// Built from differentiable-library ops only (gather, max, sign), so no host readback of
-/// logits is needed.
-fn count_correct(logits: &Variable, y: &[i64]) -> flodl::Result<f64> {
-    let b = y.len() as i64;
-    let idx = Tensor::from_i64(y, &[b, 1], Device::CPU)?;
-    let at_true = logits.gather(1, &idx)?;
-    let max = logits.max_dim(1, true)?;
-    // diff == 0 iff the true class attains the max; sign(diff) in {0,1}
-    max.sub(&at_true)?
-        .sign()?
-        .neg()?
-        .add_scalar(1.0)?
+/// Number of rows whose highest logit is the true class. On ties the lowest class index
+/// wins, as in [`report`].
+fn count_correct(logits: &Variable, targets: &Variable) -> flodl::Result<f64> {
+    logits
+        .data()
+        .argmax(1, false)?
+        .eq_tensor(&targets.data())?
         .sum()?
         .item()
 }
@@ -89,12 +99,13 @@ pub fn evaluate<M: Module + ?Sized>(
     batch_size: usize,
 ) -> flodl::Result<(f64, f64)> {
     model.eval();
+    let device = model_device(model);
     let (mut loss_sum, mut correct) = (0.0, 0.0);
     for idx in batch_indices(data.n, batch_size, None) {
-        let (x, t, y) = batch_inputs(data, &idx)?;
+        let (x, t) = batch_inputs(data, &idx, device)?;
         let logits = model.forward(&x)?;
         loss_sum += cross_entropy_loss(&logits, &t)?.item()? * idx.len() as f64;
-        correct += count_correct(&logits, &y)?;
+        correct += count_correct(&logits, &t)?;
     }
     let n = data.n.max(1) as f64;
     Ok((loss_sum / n, correct / n))
@@ -115,6 +126,7 @@ pub fn fit<M: Module + ?Sized>(
     cfg: &TrainConfig,
 ) -> flodl::Result<Vec<EpochStats>> {
     let params = model.parameters();
+    let device = model_device(model);
     let mut rng = Rng::new(cfg.seed);
     let mut history = Vec::new();
     let (mut best_val, mut since_best) = (f64::INFINITY, 0usize);
@@ -123,7 +135,7 @@ pub fn fit<M: Module + ?Sized>(
         model.train();
         let (mut loss_sum, mut correct) = (0.0, 0.0);
         for idx in batch_indices(train.n, cfg.batch_size, Some(&mut rng)) {
-            let (x, t, y) = batch_inputs(train, &idx)?;
+            let (x, t) = batch_inputs(train, &idx, device)?;
             let logits = model.forward(&x)?;
             let loss = cross_entropy_loss(&logits, &t)?;
             opt.zero_grad();
@@ -133,7 +145,7 @@ pub fn fit<M: Module + ?Sized>(
             }
             opt.step()?;
             loss_sum += loss.item()? * idx.len() as f64;
-            correct += count_correct(&logits, &y)?;
+            correct += count_correct(&logits, &t)?;
         }
         let n = train.n.max(1) as f64;
         let (val_loss, val_acc) = match val {
@@ -186,9 +198,10 @@ pub fn predict_probs<M: Module + ?Sized>(
     batch_size: usize,
 ) -> flodl::Result<Vec<f32>> {
     model.eval();
+    let device = model_device(model);
     let mut out = Vec::new();
     for idx in batch_indices(data.n, batch_size, None) {
-        let (x, _, _) = batch_inputs(data, &idx)?;
+        let (x, _) = batch_inputs(data, &idx, device)?;
         out.extend(model.forward(&x)?.softmax(1)?.data().to_f32_vec()?);
     }
     Ok(out)

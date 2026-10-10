@@ -14,6 +14,7 @@
 //! ```
 
 use flodl::{Module, Parameter, Variable};
+use std::rc::Rc;
 
 /*
 Gaurav Sablok
@@ -23,7 +24,7 @@ gsablok@proton.me
 /// Runs modules one after another.
 #[derive(Default)]
 pub struct Sequential {
-    layers: Vec<Box<dyn Module>>,
+    layers: Vec<Rc<dyn Module>>,
 }
 
 impl Sequential {
@@ -33,7 +34,7 @@ impl Sequential {
 
     /// Append any flodl module (or any of this crate's models).
     pub fn push<M: Module + 'static>(mut self, m: M) -> Self {
-        self.layers.push(Box::new(m));
+        self.layers.push(Rc::new(m));
         self
     }
 
@@ -58,8 +59,8 @@ impl Module for Sequential {
         Ok(h)
     }
 
-    fn parameters(&self) -> Vec<Parameter> {
-        self.layers.iter().flat_map(|l| l.parameters()).collect()
+    fn sub_modules(&self) -> Vec<Rc<dyn Module>> {
+        self.layers.clone()
     }
 
     fn set_training(&self, training: bool) {
@@ -71,24 +72,26 @@ impl Module for Sequential {
 
 /// `x + f(x)`. `f` must preserve the shape.
 pub struct Residual<M: Module> {
-    inner: M,
+    inner: Rc<M>,
 }
 
 impl<M: Module> Residual<M> {
     pub fn new(inner: M) -> Self {
-        Residual { inner }
+        Residual {
+            inner: Rc::new(inner),
+        }
     }
 }
 
-impl<M: Module> Module for Residual<M> {
+impl<M: Module + 'static> Module for Residual<M> {
     fn name(&self) -> &str {
         "residual"
     }
     fn forward(&self, x: &Variable) -> flodl::Result<Variable> {
         x.add(&self.inner.forward(x)?)
     }
-    fn parameters(&self) -> Vec<Parameter> {
-        self.inner.parameters()
+    fn sub_modules(&self) -> Vec<Rc<dyn Module>> {
+        vec![self.inner.clone()]
     }
     fn set_training(&self, t: bool) {
         self.inner.set_training(t);
@@ -166,7 +169,7 @@ impl Module for Lambda {
 /// Runs several branches on the same input and concatenates their outputs along `dim`
 /// (inception-style multi-width motif scanners, multi-modal heads, ...).
 pub struct ConcatBranches {
-    branches: Vec<Box<dyn Module>>,
+    branches: Vec<Rc<dyn Module>>,
     dim: i32,
 }
 
@@ -179,7 +182,7 @@ impl ConcatBranches {
     }
 
     pub fn branch<M: Module + 'static>(mut self, m: M) -> Self {
-        self.branches.push(Box::new(m));
+        self.branches.push(Rc::new(m));
         self
     }
 }
@@ -199,8 +202,8 @@ impl Module for ConcatBranches {
         Variable::cat_many(&refs, self.dim)
     }
 
-    fn parameters(&self) -> Vec<Parameter> {
-        self.branches.iter().flat_map(|b| b.parameters()).collect()
+    fn sub_modules(&self) -> Vec<Rc<dyn Module>> {
+        self.branches.clone()
     }
     fn set_training(&self, t: bool) {
         for b in &self.branches {
