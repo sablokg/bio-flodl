@@ -12,6 +12,10 @@ impl Tensor {
     pub fn from_f32(data: &[f32], shape: &[i64], device: Device) -> Result<Tensor> { todo!() }
     pub fn from_i64(data: &[i64], shape: &[i64], device: Device) -> Result<Tensor> { todo!() }
     pub fn to_f32_vec(&self) -> Result<Vec<f32>> { todo!() }
+    pub fn argmax(&self, dim: i32, keepdim: bool) -> Result<Tensor> { todo!() }
+    pub fn eq_tensor(&self, other: &Tensor) -> Result<Tensor> { todo!() }
+    pub fn sum(&self) -> Result<Tensor> { todo!() }
+    pub fn item(&self) -> Result<f64> { todo!() }
 }
 
 #[derive(Clone)] pub struct Variable;
@@ -36,16 +40,21 @@ impl Variable {
     pub fn data(&self) -> Tensor { todo!() }
     pub fn shape(&self) -> Vec<i64> { todo!() }
     pub fn device(&self) -> Device { todo!() }
+    pub fn to_device(&self, device: Device) -> Result<Variable> { todo!() }
     pub fn item(&self) -> Result<f64> { todo!() }
     pub fn backward(&self) -> Result<()> { todo!() }
 }
 
 #[derive(Clone)] pub struct Parameter { pub variable: Variable, pub name: String }
 impl Parameter { pub fn new(data: Tensor, name: &str) -> Self { todo!() } }
+#[derive(Clone)] pub struct Buffer { pub name: String }
+impl Buffer { pub fn device(&self) -> Device { todo!() } }
 
 pub trait Module {
     fn forward(&self, input: &Variable) -> Result<Variable>;
     fn parameters(&self) -> Vec<Parameter> { Vec::new() }
+    fn buffers(&self) -> Vec<Buffer> { Vec::new() }
+    fn move_to_device(&self, device: Device) {}
     fn name(&self) -> &str { "module" }
     fn sub_modules(&self) -> Vec<Rc<dyn Module>> { Vec::new() }
     fn set_training(&self, _training: bool) {}
@@ -57,7 +66,7 @@ macro_rules! leaf { ($t:ident) => { pub struct $t; impl Module for $t { fn forwa
 leaf!(Linear);
 pub struct Conv1d { pub weight: Parameter, pub bias: Option<Parameter> }
 impl Module for Conv1d { fn forward(&self, i: &Variable) -> Result<Variable> { todo!() } fn parameters(&self) -> Vec<Parameter> { todo!() } }
- leaf!(LayerNorm); leaf!(MultiheadAttention); leaf!(LSTM); leaf!(GRU); leaf!(Dropout);
+ leaf!(LayerNorm); leaf!(MultiheadAttention); leaf!(LSTM); leaf!(GRU); leaf!(Dropout); leaf!(BatchNorm);
 impl Linear { pub fn new(i: i64, o: i64) -> Result<Self> { todo!() } }
 impl Conv1d {
     pub fn new(i: i64, o: i64, k: i64) -> Result<Self> { todo!() }
@@ -66,6 +75,7 @@ impl Conv1d {
 }
 impl Conv1d { }
 impl LayerNorm { pub fn new(size: i64) -> Result<Self> { todo!() } }
+impl BatchNorm { pub fn new(num_features: i64) -> Result<Self> { todo!() } }
 impl MultiheadAttention {
     pub fn new(e: i64, h: i64) -> Result<Self> { todo!() }
     pub fn forward_ext(&self, q: &Variable, k: &Variable, v: &Variable, mask: Option<&Tensor>) -> Result<Variable> { todo!() }
@@ -87,3 +97,4 @@ impl Optimizer for Adam { fn step(&mut self) -> Result<()> { todo!() } fn zero_g
 
 pub fn cross_entropy_loss(pred: &Variable, target: &Variable) -> Result<Variable> { todo!() }
 pub fn clip_grad_norm(params: &[Parameter], max_norm: f64) -> Result<f64> { todo!() }
+pub fn gpu_available() -> bool { todo!() }

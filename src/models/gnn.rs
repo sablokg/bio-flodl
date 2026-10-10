@@ -4,7 +4,7 @@
 //! Dense message passing is O(N²) and suits molecules, small contact graphs and
 //! residue graphs; it is not intended for graphs with 100k+ nodes.
 
-use super::{glorot, zeros_param};
+use super::{glorot, zeros_param, Constant};
 use flodl::{Dropout, Linear, Module, Parameter, Variable};
 
 /*
@@ -48,7 +48,7 @@ pub enum Readout {
 
 pub struct GcnNet {
     layers: Vec<GcnLayer>,
-    a_hat: Variable,
+    a_hat: Constant,
     drop: Dropout,
     head: Linear,
     readout: Readout,
@@ -56,7 +56,7 @@ pub struct GcnNet {
 
 impl GcnNet {
     /// `a_hat`: normalised adjacency, e.g. [`crate::bridge::gcn_adjacency_variable`].
-    /// Create it on the device the model will run on.
+    /// It follows the input to whatever device the model runs on.
     pub fn new(
         a_hat: Variable,
         in_f: i64,
@@ -73,7 +73,7 @@ impl GcnNet {
         }
         Ok(GcnNet {
             layers,
-            a_hat,
+            a_hat: Constant::new(a_hat),
             drop: Dropout::new(dropout),
             head: Linear::new(hidden, classes)?,
             readout,
@@ -87,11 +87,10 @@ impl Module for GcnNet {
     }
 
     fn forward(&self, x: &Variable) -> flodl::Result<Variable> {
+        let a_hat = self.a_hat.on(x.device())?;
         let mut h = x.clone();
         for l in &self.layers {
-            h = self
-                .drop
-                .forward(&l.forward_with(&h, &self.a_hat)?.relu()?)?;
+            h = self.drop.forward(&l.forward_with(&h, &a_hat)?.relu()?)?;
         }
         if self.readout == Readout::GraphMean {
             let node_dim = h.shape().len() as i32 - 2;
@@ -197,7 +196,7 @@ impl GatLayer {
 pub struct GatNet {
     hidden: GatLayer,
     out: GatLayer,
-    neg_mask: Variable,
+    neg_mask: Constant,
     drop: Dropout,
     head: Linear,
     readout: Readout,
@@ -218,7 +217,7 @@ impl GatNet {
         Ok(GatNet {
             hidden,
             out: GatLayer::new(hid_total, hidden_per_head, 1, false)?,
-            neg_mask,
+            neg_mask: Constant::new(neg_mask),
             drop: Dropout::new(dropout),
             head: Linear::new(hidden_per_head, classes)?,
             readout,
@@ -232,11 +231,12 @@ impl Module for GatNet {
     }
 
     fn forward(&self, x: &Variable) -> flodl::Result<Variable> {
+        let neg_mask = self.neg_mask.on(x.device())?;
         let h = self.drop.forward(x)?;
         let h = self
             .drop
-            .forward(&self.hidden.forward_with(&h, &self.neg_mask)?.elu(1.0)?)?;
-        let mut h = self.out.forward_with(&h, &self.neg_mask)?.elu(1.0)?;
+            .forward(&self.hidden.forward_with(&h, &neg_mask)?.elu(1.0)?)?;
+        let mut h = self.out.forward_with(&h, &neg_mask)?.elu(1.0)?;
         if self.readout == Readout::GraphMean {
             let node_dim = h.shape().len() as i32 - 2;
             h = h.mean_dim(node_dim, false)?;

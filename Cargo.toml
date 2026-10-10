@@ -11,6 +11,8 @@ keywords = ["bioinformatics", "deep-learning", "flodl", "graph", "one-hot"]
 default = []
 # Enables the tensor bridge and model builders (requires libtorch, see flodl docs).
 flodl = ["dep:flodl"]
+# Same, built against a CUDA libtorch so models can run on the GPU.
+cuda = ["flodl", "flodl/cuda"]
 
 [dependencies]
 flodl = { version = "0.8", optional = true }

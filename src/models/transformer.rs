@@ -1,6 +1,6 @@
 //! Transformer encoder classifier. Input `[batch, length, alphabet]` (one-hot).
 
-use super::from_f32;
+use super::{from_f32, Constant};
 use crate::encode::sinusoidal_positions;
 use flodl::{Dropout, LayerNorm, Linear, Module, MultiheadAttention, Parameter, Tensor, Variable};
 
@@ -69,7 +69,7 @@ pub struct TransformerConfig {
 
 pub struct TransformerClassifier {
     embed: Linear,
-    pos: Variable,
+    pos: Constant,
     layers: Vec<EncoderLayer>,
     ln_f: LayerNorm,
     drop: Dropout,
@@ -83,7 +83,10 @@ impl TransformerClassifier {
             "d_model must be divisible by heads"
         );
         let pe = sinusoidal_positions(cfg.max_len, cfg.d_model as usize);
-        let pos = Variable::new(from_f32(&pe, &[1, cfg.max_len as i64, cfg.d_model])?, false);
+        let pos = Constant::new(Variable::new(
+            from_f32(&pe, &[1, cfg.max_len as i64, cfg.d_model])?,
+            false,
+        ));
         let mut layers = Vec::new();
         for _ in 0..cfg.layers {
             layers.push(EncoderLayer::new(
@@ -106,7 +109,8 @@ impl TransformerClassifier {
     /// Per-position contextual embeddings `[batch, length, d_model]`.
     pub fn encode(&self, x: &Variable, mask: Option<&Tensor>) -> flodl::Result<Variable> {
         let l = x.shape()[1];
-        let mut h = self.embed.forward(x)?.add(&self.pos.narrow(1, 0, l)?)?;
+        let pos = self.pos.on(x.device())?.narrow(1, 0, l)?;
+        let mut h = self.embed.forward(x)?.add(&pos)?;
         h = self.drop.forward(&h)?;
         for layer in &self.layers {
             h = layer.forward_masked(&h, mask)?;
