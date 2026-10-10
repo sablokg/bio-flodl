@@ -1,6 +1,8 @@
-# bio-flodl
+# flodl-bio
 
 Bioinformatics data layer **and model zoo** for [flodl](https://docs.rs/flodl) (Rust deep learning on libtorch).
+
+flodl-bio is a community crate built on flodl, developed and maintained by Gaurav Sablok.
 
 ## What's in it
 
@@ -13,7 +15,7 @@ Bioinformatics data layer **and model zoo** for [flodl](https://docs.rs/flodl) (
 | `models::gnn` | `GcnLayer`/`GcnNet`, `GatLayer`/`GatNet` (multi-head, dense), node or graph-mean readout | tested, CPU + GPU |
 | `models::mlp` | `FlatMlp` baseline | tested, CPU + GPU |
 | `models::compose` | `Sequential`, `Residual`, `Lambda` (relu/gelu/global pooling/flatten/transpose), `ConcatBranches`: assemble **any** flodl layer into a trainable model | tested, CPU + GPU |
-| `prelude` | `use bio_flodl::prelude::*;` gives all of flodl plus this crate's models and trainer | tested |
+| `prelude` | `use flodl_bio::prelude::*;` gives all of flodl plus this crate's models and trainer | tested |
 | `train` | `fit` (any `Module` + any `Optimizer`, grad clipping, LR decay, early stopping), `fit_with` (same, with a per-epoch callback), `evaluate`, `predict_proba`, `predict_probs`, `report` (accuracy, macro-F1, MCC, AUROC, AUPRC) | tested, CPU + GPU |
 
 **"Tested, CPU + GPU" means** `tests/models.rs` trains and evaluates every bundled model, and a container
@@ -23,10 +25,10 @@ installed.
 
 ## Everything in flodl is available through the prelude
 
-`bio-flodl` does not reimplement flodl's layers. With the `flodl` feature on,
+`flodl-bio` does not reimplement flodl's layers. With the `flodl` feature on,
 
 ```rust
-use bio_flodl::prelude::*;
+use flodl_bio::prelude::*;
 ```
 
 is a glob re-export of the whole flodl crate root (`pub use flodl::*`) **plus** this crate's models,
@@ -48,13 +50,13 @@ sync with the flodl version you build against.
 | **Optimizers** | `Adam`, `AdamW`, `SGD`, `RMSprop`, `NAdam`, `RAdam`, `Adagrad` |
 | **LR schedulers** | cosine, one-cycle, step, multi-step, exponential, plateau, warmup, cyclic |
 
-### Limits of "everything is in bio-flodl"
+### Limits of "everything is in flodl-bio"
 
-1. **Only through the prelude, only with `--features flodl`.** `bio_flodl::Conv2d` at the crate root does not
-   exist. Without the feature, `bio-flodl` does not depend on flodl.
+1. **Only through the prelude, only with `--features flodl`.** `flodl_bio::Conv2d` at the crate root does not
+   exist. Without the feature, `flodl-bio` does not depend on flodl.
 2. **Only flodl's top-level exports.** Items that flodl keeps in a submodule without re-exporting at the root
    must be imported from `flodl` directly (add `flodl` to your own `Cargo.toml`; it is the same crate).
-3. **On a name clash, bio-flodl wins.** This crate's types (`MotifCnn`, `Sequential`, `Readout`, `fit`, `adam`, ...)
+3. **On a name clash, flodl-bio wins.** This crate's types (`MotifCnn`, `Sequential`, `Readout`, `fit`, `adam`, ...)
    are explicit re-exports and shadow glob-imported flodl names. I know of no actual clash but have not
    compared every flodl name against mine.
 4. flodl itself needs libtorch and Rust 1.91+.
@@ -74,7 +76,7 @@ Sketch (constructors shown for `Conv1d`, `Dropout`, `Linear` are the verified on
 `MaxPool1d`, `BatchNorm`, `Conv2d`, ... after checking their signatures):
 
 ```rust
-use bio_flodl::prelude::*;
+use flodl_bio::prelude::*;
 
 let model = Sequential::new()
     .push(Conv1d::new(4, 64, 9)?)      // [B, 4, L] -> [B, 64, L-8]
@@ -149,7 +151,7 @@ so they are O(n log n).
 ## Quick example
 
 ```rust
-use bio_flodl::{alphabet::Alphabet, data::Dataset, models::cnn::*, train::*};
+use flodl_bio::{alphabet::Alphabet, data::Dataset, models::cnn::*, train::*};
 
 let ds = Dataset::from_sequences(&seqs, &labels, &Alphabet::DNA, 100, true)?;
 let (train, val) = ds.split(0.2, 1);

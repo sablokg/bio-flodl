@@ -2,11 +2,11 @@
 //! `cargo run --release --features flodl --example gat_graph`
 
 mod common;
-use bio_flodl::bridge::attention_mask_variable;
-use bio_flodl::data::synthetic_graph_task;
-use bio_flodl::graph::{distance_matrix, from_contact_map};
-use bio_flodl::models::gnn::{GatNet, Readout};
-use bio_flodl::train::{adam, fit, report, TrainConfig};
+use flodl_bio::bridge::attention_mask_variable;
+use flodl_bio::data::synthetic_graph_task;
+use flodl_bio::graph::{distance_matrix, from_contact_map};
+use flodl_bio::models::gnn::{GatNet, Readout};
+use flodl_bio::train::{adam, fit, report, TrainConfig};
 
 fn main() -> flodl::Result<()> {
     let nodes = 24;

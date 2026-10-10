@@ -1,7 +1,7 @@
 //! Sequence encodings. No libtorch needed: `cargo run --example encode_tour`
 
-use bio_flodl::alphabet::{gc_content, reverse_complement, Alphabet};
-use bio_flodl::encode::*;
+use flodl_bio::alphabet::{gc_content, reverse_complement, Alphabet};
+use flodl_bio::encode::*;
 
 fn main() {
     let dna = b"ACGTNACGT";

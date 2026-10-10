@@ -1,4 +1,4 @@
-//! Signature-only stub of flodl 0.8 (from docs.rs) used to type-check bio-flodl without libtorch.
+//! Signature-only stub of flodl 0.8 (from docs.rs) used to type-check flodl-bio without libtorch.
 #![allow(unused_variables, clippy::all)]
 use std::rc::Rc;
 

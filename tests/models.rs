@@ -3,11 +3,11 @@
 //! `cargo test --features cuda --test models -- --ignored`.
 #![cfg(feature = "flodl")]
 
-use bio_flodl::alphabet::Alphabet;
-use bio_flodl::bridge::{attention_mask_variable, gcn_adjacency_variable};
-use bio_flodl::data::{synthetic_graph_task, synthetic_motif, Dataset};
-use bio_flodl::graph::chain;
-use bio_flodl::prelude::*;
+use flodl_bio::alphabet::Alphabet;
+use flodl_bio::bridge::{attention_mask_variable, gcn_adjacency_variable};
+use flodl_bio::data::{synthetic_graph_task, synthetic_motif, Dataset};
+use flodl_bio::graph::chain;
+use flodl_bio::prelude::*;
 
 fn motif_data(channels_first: bool) -> (Dataset, Dataset) {
     let (seqs, labels) = synthetic_motif(200, 50, b"TATAAA", 7);
@@ -186,7 +186,7 @@ fn fit_with_reports_every_epoch() -> Result<()> {
 
 #[test]
 fn motif_cnn_filters_recover_the_planted_motif() -> Result<()> {
-    use bio_flodl::motif::pfms_from_activations;
+    use flodl_bio::motif::pfms_from_activations;
     manual_seed(1);
     let (seqs, labels) = synthetic_motif(2000, 50, b"TATAAA", 7);
     let refs: Vec<&[u8]> = seqs.iter().map(|s| s.as_slice()).collect();

@@ -7,13 +7,13 @@
 //! Sequences are centre-cropped / N-padded to `--len`. The split is 80/20, seeded, identical for every model.
 
 mod common;
-use bio_flodl::alphabet::Alphabet;
-use bio_flodl::data::Dataset;
-use bio_flodl::io::{fit_length, read_fasta};
-use bio_flodl::models::cnn::{DilatedCnnConfig, DilatedResCnn, MotifCnn, MotifCnnConfig};
-use bio_flodl::models::rnn::{BiRnnClassifier, RnnKind};
-use bio_flodl::models::transformer::{TransformerClassifier, TransformerConfig};
-use bio_flodl::train::{adam, fit, report, TrainConfig};
+use flodl_bio::alphabet::Alphabet;
+use flodl_bio::data::Dataset;
+use flodl_bio::io::{fit_length, read_fasta};
+use flodl_bio::models::cnn::{DilatedCnnConfig, DilatedResCnn, MotifCnn, MotifCnnConfig};
+use flodl_bio::models::rnn::{BiRnnClassifier, RnnKind};
+use flodl_bio::models::transformer::{TransformerClassifier, TransformerConfig};
+use flodl_bio::train::{adam, fit, report, TrainConfig};
 use flodl::Module;
 use std::time::Instant;
 

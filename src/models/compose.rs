@@ -4,7 +4,7 @@
 //! these containers wire them together and make them trainable with [`crate::train`].
 //!
 //! ```ignore
-//! use bio_flodl::prelude::*;
+//! use flodl_bio::prelude::*;
 //! let model = Sequential::new()
 //!     .push(Conv1d::new(4, 64, 9)?)
 //!     .push(Lambda::relu())

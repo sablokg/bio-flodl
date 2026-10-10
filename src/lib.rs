@@ -1,4 +1,4 @@
-//! # bio-flodl
+//! # flodl-bio
 //!
 //! Bioinformatics data layer for [flodl](https://docs.rs/flodl).
 //!
@@ -63,7 +63,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// One import for everything: **all of flodl** (layers, losses, optimizers, schedulers, tensors,
 /// graph builder, data loaders, ...) plus this crate's models, containers and training loop.
 ///
-/// Names defined by bio-flodl take precedence over flodl's on collision (they are explicit
+/// Names defined by flodl-bio take precedence over flodl's on collision (they are explicit
 /// re-exports; flodl's come through the glob).
 #[cfg(feature = "flodl")]
 pub mod prelude {

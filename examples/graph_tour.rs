@@ -1,6 +1,6 @@
 //! Graph construction and normalisation. No libtorch needed: `cargo run --example graph_tour`
 
-use bio_flodl::graph::*;
+use flodl_bio::graph::*;
 
 fn print_matrix(name: &str, m: &[f32], n: usize) {
     println!("{name}:");

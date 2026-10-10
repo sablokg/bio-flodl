@@ -1,9 +1,9 @@
 //! Helpers shared by the flodl examples (`mod common;`).
 #![allow(dead_code)]
 
-use bio_flodl::alphabet::Alphabet;
-use bio_flodl::data::{synthetic_motif, Dataset};
-use bio_flodl::train::Report;
+use flodl_bio::alphabet::Alphabet;
+use flodl_bio::data::{synthetic_motif, Dataset};
+use flodl_bio::train::Report;
 
 /// Planted-motif task: DNA of length `len`, positives contain `TATAAA`.
 /// `channels_first = true` gives `[4, L]` samples (CNNs), otherwise `[L, 4]` (RNN / Transformer).

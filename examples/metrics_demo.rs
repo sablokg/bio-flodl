@@ -1,7 +1,7 @@
 //! Datasets, splitting and metrics. No libtorch needed: `cargo run --example metrics_demo`
 
-use bio_flodl::alphabet::Alphabet;
-use bio_flodl::data::*;
+use flodl_bio::alphabet::Alphabet;
+use flodl_bio::data::*;
 
 fn main() {
     let (seqs, labels) = synthetic_motif(1000, 100, b"TATAAA", 7);

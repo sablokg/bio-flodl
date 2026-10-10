@@ -2,8 +2,8 @@
 //! `cargo run --release --features flodl --example dilated_cnn`
 
 mod common;
-use bio_flodl::models::cnn::{DilatedCnnConfig, DilatedResCnn};
-use bio_flodl::train::{adam, fit, report, TrainConfig};
+use flodl_bio::models::cnn::{DilatedCnnConfig, DilatedResCnn};
+use flodl_bio::train::{adam, fit, report, TrainConfig};
 
 fn main() -> flodl::Result<()> {
     let (train, val) = common::motif_task(2000, 200, true, 42);

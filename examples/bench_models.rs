@@ -5,15 +5,15 @@
 //! mode, samples/s, and parameter count. Compare against a PyTorch reference of the same architecture
 //! and batch size on the same machine for the "throughput" row of the evaluation.
 
-use bio_flodl::bridge::{attention_mask_variable, gcn_adjacency_variable, labels_variable};
-use bio_flodl::data::Rng;
-use bio_flodl::graph::Graph;
-use bio_flodl::models::cnn::*;
-use bio_flodl::models::gnn::*;
-use bio_flodl::models::mlp::FlatMlp;
-use bio_flodl::models::rnn::{BiRnnClassifier, RnnKind};
-use bio_flodl::models::transformer::{TransformerClassifier, TransformerConfig};
-use bio_flodl::train::adam;
+use flodl_bio::bridge::{attention_mask_variable, gcn_adjacency_variable, labels_variable};
+use flodl_bio::data::Rng;
+use flodl_bio::graph::Graph;
+use flodl_bio::models::cnn::*;
+use flodl_bio::models::gnn::*;
+use flodl_bio::models::mlp::FlatMlp;
+use flodl_bio::models::rnn::{BiRnnClassifier, RnnKind};
+use flodl_bio::models::transformer::{TransformerClassifier, TransformerConfig};
+use flodl_bio::train::adam;
 use flodl::{cross_entropy_loss, Module, Optimizer, Tensor, Variable};
 use std::time::Instant;
 
