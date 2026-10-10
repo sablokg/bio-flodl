@@ -7,18 +7,19 @@ Bioinformatics data layer **and model zoo** for [flodl](https://docs.rs/flodl) (
 | Area | Contents | Verified |
 |---|---|---|
 | Core (pure Rust, no libtorch) | FASTA parsing and fixed-length cropping/padding; DNA/RNA/protein alphabets; one-hot (strict/lenient/labels/batch+mask, channels-first); k-mers; reverse complement; graphs, dense/GCN-normalised/row-normalised adjacency, Laplacian, attention mask, contact maps, de Bruijn; datasets, batching, seeded RNG, accuracy / confusion matrix / macro-F1 / MCC / AUROC / AUPRC; synthetic motif and graph tasks; sinusoidal positions | 16 tests pass |
-| `models::cnn` | `MotifCnn` (parallel multi-width Conv1d motif scanners, global max-pool, filter extraction), `DilatedResCnn` (residual dilated Conv1d, exponential receptive field) | type-checked |
-| `models::rnn` | `BiRnnClassifier` (bidirectional LSTM or GRU) | type-checked |
-| `models::transformer` | `TransformerClassifier` (pre-LN encoder, MHA, sinusoidal positions, optional attention mask) | type-checked |
-| `models::gnn` | `GcnLayer`/`GcnNet`, `GatLayer`/`GatNet` (multi-head, dense), node or graph-mean readout | type-checked |
-| `models::mlp` | `FlatMlp` baseline | type-checked |
-| `models::compose` | `Sequential`, `Residual`, `Lambda` (relu/gelu/global pooling/flatten/transpose), `ConcatBranches`: assemble **any** flodl layer into a trainable model | type-checked |
-| `prelude` | `use bio_flodl::prelude::*;` gives all of flodl plus this crate's models and trainer | type-checked |
-| `train` | `fit` (any `Module` + any `Optimizer`, grad clipping, LR decay, early stopping), `evaluate`, `predict_proba`, `predict_probs`, `report` (accuracy, macro-F1, MCC, AUROC, AUPRC) | type-checked |
+| `models::cnn` | `MotifCnn` (parallel multi-width Conv1d motif scanners, global max-pool, filter extraction), `DilatedResCnn` (residual dilated Conv1d, exponential receptive field) | tested, CPU + GPU |
+| `models::rnn` | `BiRnnClassifier` (bidirectional LSTM or GRU) | tested, CPU + GPU |
+| `models::transformer` | `TransformerClassifier` (pre-LN encoder, MHA, sinusoidal positions, optional attention mask) | tested, CPU + GPU |
+| `models::gnn` | `GcnLayer`/`GcnNet`, `GatLayer`/`GatNet` (multi-head, dense), node or graph-mean readout | tested, CPU + GPU |
+| `models::mlp` | `FlatMlp` baseline | tested, CPU + GPU |
+| `models::compose` | `Sequential`, `Residual`, `Lambda` (relu/gelu/global pooling/flatten/transpose), `ConcatBranches`: assemble **any** flodl layer into a trainable model | tested, CPU + GPU |
+| `prelude` | `use bio_flodl::prelude::*;` gives all of flodl plus this crate's models and trainer | tested |
+| `train` | `fit` (any `Module` + any `Optimizer`, grad clipping, LR decay, early stopping), `evaluate`, `predict_proba`, `predict_probs`, `report` (accuracy, macro-F1, MCC, AUROC, AUPRC) | tested, CPU + GPU |
 
-**"Type-checked" means** it compiles against a stub that mirrors the flodl 0.8 signatures read from
-docs.rs (`tools/typecheck.sh`). It has **not been run** against real libtorch, so numerical behaviour and
-shape handling are unverified. See *Assumptions to check* below.
+**"Tested, CPU + GPU" means** `tests/models.rs` trains and evaluates every bundled model, and a container
+holding `BatchNorm`, against flodl 0.8.0 (libtorch 2.10) on the CPU and, with `--features cuda`, on the GPU.
+`tools/typecheck.sh` still checks the flodl-feature code against a signature stub when libtorch is not
+installed.
 
 ## Everything in flodl is available through the prelude
 
@@ -56,7 +57,7 @@ sync with the flodl version you build against.
 3. **On a name clash, bio-flodl wins.** This crate's types (`MotifCnn`, `Sequential`, `Readout`, `fit`, `adam`, ...)
    are explicit re-exports and shadow glob-imported flodl names. I know of no actual clash but have not
    compared every flodl name against mine.
-4. flodl itself needs libtorch and Rust 1.85+.
+4. flodl itself needs libtorch and Rust 1.91+.
 
 ### Using any component in a trainable model
 
@@ -93,7 +94,7 @@ if the container forwards `set_training`, which `Sequential`, `Residual` and `Co
 ## Examples and benchmarks (`examples/`)
 
 Run with `cargo run --release --example <name>`; add `--features flodl` for the model examples
-(needs libtorch and Rust 1.85+).
+(needs libtorch and Rust 1.91+). The examples train on the CPU; see *GPU* below to move a model.
 
 | File | Needs flodl | What it does | Status |
 |---|---|---|---|
@@ -101,17 +102,16 @@ Run with `cargo run --release --example <name>`; add `--features flodl` for the 
 | `graph_tour.rs` | no | adjacency, GCN/row-normalised adjacency, Laplacian, edge index, components, contact map from coordinates, de Bruijn | **run** |
 | `metrics_demo.rs` | no | datasets, splits, accuracy / macro-F1 / MCC / AUROC / AUPRC | **run** |
 | `bench_core.rs` | no | throughput of the data layer | **run** (results below) |
-| `motif_cnn.rs` | yes | multi-width motif CNN on a planted motif | type-checked |
-| `dilated_cnn.rs` | yes | residual dilated CNN | type-checked |
-| `birnn.rs` | yes | BiLSTM and BiGRU | type-checked |
-| `transformer.rs` | yes | Transformer encoder | type-checked |
-| `gcn_graph.rs` | yes | GCN graph classification on a contact graph | type-checked |
-| `gat_graph.rs` | yes | multi-head GAT, same task | type-checked |
-| `compose_sequential.rs` | yes | custom model from `Sequential` / `ConcatBranches` / `Lambda` using verified layers | type-checked |
-| `bench_models.rs` | yes | train and inference throughput plus parameter count for every bundled model | type-checked, **not run** |
-| `tf_binding.rs` | yes | runs every sequence model on a positive/negative FASTA pair and prints accuracy, F1, MCC, AUROC, AUPRC, time | type-checked, **not run, needs your data** |
+| `motif_cnn.rs` | yes | multi-width motif CNN on a planted motif | **run** |
+| `dilated_cnn.rs` | yes | residual dilated CNN | **run** |
+| `birnn.rs` | yes | BiLSTM and BiGRU | **run** |
+| `transformer.rs` | yes | Transformer encoder | **run** |
+| `gcn_graph.rs` | yes | GCN graph classification on a contact graph | **run** |
+| `gat_graph.rs` | yes | multi-head GAT, same task | **run** |
+| `compose_sequential.rs` | yes | custom model from `Sequential` / `ConcatBranches` / `Lambda` using verified layers | **run** |
+| `bench_models.rs` | yes | train and inference throughput plus parameter count for every bundled model | **run** |
+| `tf_binding.rs` | yes | runs every sequence model on a positive/negative FASTA pair and prints accuracy, F1, MCC, AUROC, AUPRC, time | builds, **needs your data** |
 
-"Type-checked" means compiled against the flodl signature stub (`tools/typecheck.sh`); it does not mean executed.
 The synthetic tasks (planted motif, graph classification) are smoke tests: a model that cannot learn them has a bug,
 but good scores on them say nothing about real biological performance.
 
@@ -160,10 +160,27 @@ fit(&model, &mut opt, &train, Some(&val), &TrainConfig::default())?;
 
 Full version: `examples/motif_cnn.rs`.
 
+## GPU
+
+Build against a CUDA libtorch with `--features cuda`, then move the model before creating its optimizer.
+`fit`, `evaluate`, `predict_probs` and `report` build their batches on the device of the model's parameters,
+and the GCN adjacency, GAT mask and transformer positions follow the input, so nothing else changes:
+
+```rust
+let model = MotifCnn::new(&cfg)?;
+model.move_to_device(Device::CUDA(0));
+let mut opt = adam(&model, 1e-3);
+fit(&model, &mut opt, &train, Some(&val), &TrainConfig::default())?;
 ```
-cargo test                                    # core, no libtorch
-tools/typecheck.sh                            # flodl-feature code vs. signature stub, no libtorch
-cargo run --release --features flodl --example motif_cnn   # needs libtorch + Rust 1.85
+
+## Commands
+
+```
+cargo test                                               # core, no libtorch
+cargo test --features flodl                              # core + model tier, CPU
+cargo test --features cuda --test models -- --ignored    # model tier on the GPU
+tools/typecheck.sh                                       # flodl-feature code vs. signature stub, no libtorch
+cargo run --release --features flodl --example motif_cnn # needs libtorch + Rust 1.91
 ```
 
 Gaurav Sablok \
