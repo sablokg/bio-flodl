@@ -21,7 +21,10 @@ pub struct RunSpec<'a> {
     pub epochs: usize,
     pub batch: usize,
     pub train: &'a Dataset,
+    /// Followed during training (per-epoch curves).
     pub val: &'a Dataset,
+    /// Scored once training ends; `val` when the task has no separate test split.
+    pub test: Option<&'a Dataset>,
     pub dir: PathBuf,
 }
 
@@ -52,8 +55,13 @@ fn path_str(dir: &Path, file: &str) -> String {
 
 /// Trains `model` (already built under `manual_seed(spec.seed)`) and writes, under `spec.dir`:
 /// `dashboard.html`, `epochs.csv`, `predictions.csv`, `roc.csv`, `pr.csv` and `run.json`.
+/// Predictions, curves and the reported metrics come from the test split when there is one.
 pub fn run(model: &dyn Module, spec: &RunSpec) -> Res<RunResult> {
     fs::create_dir_all(&spec.dir)?;
+    let (eval, eval_split) = match spec.test {
+        Some(test) => (test, "test"),
+        None => (spec.val, "val"),
+    };
     let gpu = spec.device != Device::CPU;
     model.move_to_device(spec.device);
     if gpu {
@@ -75,6 +83,8 @@ pub fn run(model: &dyn Module, spec: &RunSpec) -> Res<RunResult> {
         "params": params,
         "train_samples": spec.train.n,
         "val_samples": spec.val.n,
+        "eval_split": eval_split,
+        "eval_samples": eval.n,
     });
 
     let mut monitor = Monitor::new(spec.epochs);
@@ -109,25 +119,25 @@ pub fn run(model: &dyn Module, spec: &RunSpec) -> Res<RunResult> {
         .then(|| gpu_peak_active_bytes().map(|b| b as f64 / 1048576.0))
         .transpose()?;
 
-    let probs = predict_probs(model, spec.val, spec.batch)?;
+    let probs = predict_probs(model, eval, spec.batch)?;
     let scores: Vec<f32> = probs.chunks(2).map(|r| r[1]).collect();
     let mut predictions = String::from("index,label,p_positive\n");
-    for (i, (label, p)) in spec.val.y.iter().zip(&scores).enumerate() {
+    for (i, (label, p)) in eval.y.iter().zip(&scores).enumerate() {
         writeln!(predictions, "{i},{label},{p}")?;
     }
     fs::write(spec.dir.join("predictions.csv"), predictions)?;
     write_points(
         &spec.dir.join("roc.csv"),
         "fpr,tpr",
-        roc_curve(&scores, &spec.val.y),
+        roc_curve(&scores, &eval.y),
     )?;
     write_points(
         &spec.dir.join("pr.csv"),
         "recall,precision",
-        pr_curve(&scores, &spec.val.y),
+        pr_curve(&scores, &eval.y),
     )?;
 
-    let r = report(model, spec.val, 2, spec.batch)?;
+    let r = report(model, eval, 2, spec.batch)?;
     let secs: f64 = history.iter().map(|h| h.secs).sum();
     let secs_per_epoch = secs / history.len().max(1) as f64;
     let result = RunResult {

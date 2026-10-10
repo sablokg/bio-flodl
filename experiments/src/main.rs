@@ -10,25 +10,32 @@ use bio_flodl::data::{synthetic_motif, Dataset};
 use bio_flodl::prelude::*;
 use run::{device_label, Res, RunSpec};
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const USAGE: &str = "\
-usage: bio-flodl-experiments motif [options]
+usage: bio-flodl-experiments <motif|gue> [options]
 
   motif    planted-motif task: random DNA, positives carry TATAAA
+  gue      GUE human transcription-factor binding (DNABERT-2 benchmark, 5 ENCODE ChIP-seq
+           datasets): train on train, follow dev, report on test
 
 options:
-  --models a,b,...  motif, dilated, lstm, gru, transformer, transformer-stem, mlp (default: all)
-  --device d,...    cpu, cuda (default: cpu)
-  --seeds N         seeds 1 to N (default: 5)
-  --epochs N        (default: 20)
-  --batch N         (default: 64)
-  --n N             number of sequences (default: 2000)
-  --len N           sequence length (default: 100)
-  --out DIR         (default: runs)";
+  --models a,b,...    motif, dilated, lstm, gru, transformer, transformer-stem, mlp (default: all)
+  --device d,...      cpu, cuda (default: cpu)
+  --seeds N           seeds 1 to N (default: 5)
+  --epochs N          (default: 20)
+  --batch N           (default: 64)
+  --out DIR           (default: runs)
+motif:
+  --n N               number of sequences (default: 2000)
+  --len N             sequence length (default: 100)
+gue:
+  --data DIR          the extracted GUE directory (the one holding tf/)
+  --datasets k,...    TF datasets 0 to 4 (default: all)";
 
 const MODELS: [&str; 7] = [
     "motif",
@@ -54,6 +61,9 @@ const RESULT_FIELDS: [&str; 9] = [
 ];
 
 struct Args {
+    /// `motif`, `gue`, or `run-one` (one cell, in a child process).
+    command: String,
+    /// `motif` or `gue`; for `run-one` it comes from `--task`.
     task: String,
     models: Vec<String>,
     devices: Vec<String>,
@@ -62,18 +72,21 @@ struct Args {
     batch: usize,
     n: usize,
     len: usize,
+    data: Option<PathBuf>,
+    datasets: Vec<usize>,
     out: PathBuf,
 }
 
 fn parse_args() -> Res<Args> {
     let mut it = std::env::args().skip(1);
-    let task = it.next().ok_or(USAGE)?;
-    if task == "-h" || task == "--help" {
+    let command = it.next().ok_or(USAGE)?;
+    if command == "-h" || command == "--help" {
         println!("{USAGE}");
         std::process::exit(0);
     }
     let mut a = Args {
-        task,
+        task: command.clone(),
+        command,
         models: MODELS.iter().map(|m| m.to_string()).collect(),
         devices: vec!["cpu".into()],
         seeds: 5,
@@ -81,6 +94,8 @@ fn parse_args() -> Res<Args> {
         batch: 64,
         n: 2000,
         len: 100,
+        data: None,
+        datasets: (0..5).collect(),
         out: PathBuf::from("runs"),
     };
     while let Some(flag) = it.next() {
@@ -96,6 +111,14 @@ fn parse_args() -> Res<Args> {
             "--batch" => a.batch = value.parse()?,
             "--n" => a.n = value.parse()?,
             "--len" => a.len = value.parse()?,
+            "--task" => a.task = value,
+            "--data" => a.data = Some(PathBuf::from(value)),
+            "--datasets" | "--dataset" => {
+                a.datasets = list()
+                    .iter()
+                    .map(|k| k.parse())
+                    .collect::<std::result::Result<_, _>>()?
+            }
             "--out" => a.out = PathBuf::from(value),
             _ => return Err(format!("unknown option {flag}\n\n{USAGE}").into()),
         }
@@ -107,6 +130,9 @@ fn parse_args() -> Res<Args> {
     }
     for d in &a.devices {
         parse_device(d)?;
+    }
+    if a.task == "gue" && a.data.is_none() {
+        return Err(format!("gue needs --data <GUE dir>\n\n{USAGE}").into());
     }
     Ok(a)
 }
@@ -120,9 +146,15 @@ fn parse_device(name: &str) -> Res<Device> {
     }
 }
 
-/// Builds model `name` for sequences of `len` bases: the model, whether it takes the
-/// channels-first layout, and its learning rate (those of `examples/tf_binding.rs`).
-fn build(name: &str, len: usize) -> Res<(Box<dyn Module>, bool, f64)> {
+/// Whether model `name` takes `[batch, alphabet, length]` (the convolutional models) rather
+/// than `[batch, length, alphabet]`.
+fn channels_first(name: &str) -> bool {
+    matches!(name, "motif" | "dilated")
+}
+
+/// Builds model `name` for sequences of `len` bases, with its learning rate (those of
+/// `examples/tf_binding.rs`).
+fn build(name: &str, len: usize) -> Res<(Box<dyn Module>, f64)> {
     let transformer = |alphabet| TransformerConfig {
         alphabet,
         d_model: 64,
@@ -133,7 +165,7 @@ fn build(name: &str, len: usize) -> Res<(Box<dyn Module>, bool, f64)> {
         dropout: 0.1,
         classes: 2,
     };
-    let built: (Box<dyn Module>, bool, f64) = match name {
+    let built: (Box<dyn Module>, f64) = match name {
         "motif" => (
             Box::new(MotifCnn::new(&MotifCnnConfig {
                 in_channels: 4,
@@ -142,7 +174,6 @@ fn build(name: &str, len: usize) -> Res<(Box<dyn Module>, bool, f64)> {
                 dropout: 0.3,
                 classes: 2,
             })?),
-            true,
             1e-3,
         ),
         "dilated" => (
@@ -154,24 +185,17 @@ fn build(name: &str, len: usize) -> Res<(Box<dyn Module>, bool, f64)> {
                 dropout: 0.3,
                 classes: 2,
             })?),
-            true,
             1e-3,
         ),
         "lstm" => (
             Box::new(BiRnnClassifier::new(RnnKind::Lstm, 4, 64, 1, 0.3, 2)?),
-            false,
             2e-3,
         ),
         "gru" => (
             Box::new(BiRnnClassifier::new(RnnKind::Gru, 4, 64, 1, 0.3, 2)?),
-            false,
             2e-3,
         ),
-        "transformer" => (
-            Box::new(TransformerClassifier::new(&transformer(4))?),
-            false,
-            5e-4,
-        ),
+        "transformer" => (Box::new(TransformerClassifier::new(&transformer(4))?), 5e-4),
         // The same transformer behind a Conv1d stem, which gives it local k-mer features.
         "transformer-stem" => (
             Box::new(
@@ -182,12 +206,10 @@ fn build(name: &str, len: usize) -> Res<(Box<dyn Module>, bool, f64)> {
                     .push(Lambda::transpose(1, 2))
                     .push(TransformerClassifier::new(&transformer(64))?),
             ),
-            false,
             5e-4,
         ),
         "mlp" => (
             Box::new(FlatMlp::new(4 * len as i64, &[256, 256], 2, 0.3)?),
-            false,
             1e-3,
         ),
         other => return Err(format!("unknown model {other}").into()),
@@ -195,81 +217,189 @@ fn build(name: &str, len: usize) -> Res<(Box<dyn Module>, bool, f64)> {
     Ok(built)
 }
 
-fn task_name(a: &Args) -> String {
-    format!("motif-n{}-len{}", a.n, a.len)
+/// One dataset of a task: its name (the output directory) and, for GUE, its index.
+struct Cell {
+    name: String,
+    dataset: Option<usize>,
 }
 
-fn run_dir(a: &Args, model: &str, device: &str, seed: u64) -> PathBuf {
+fn cells(a: &Args) -> Vec<Cell> {
+    match a.task.as_str() {
+        "gue" => a
+            .datasets
+            .iter()
+            .map(|&k| Cell {
+                name: format!("gue-tf-{k}"),
+                dataset: Some(k),
+            })
+            .collect(),
+        _ => vec![Cell {
+            name: format!("motif-n{}-len{}", a.n, a.len),
+            dataset: None,
+        }],
+    }
+}
+
+fn run_dir(a: &Args, cell: &str, model: &str, device: &str, seed: u64) -> PathBuf {
     a.out
-        .join(task_name(a))
+        .join(cell)
         .join(model)
         .join(device)
         .join(format!("seed-{seed}"))
 }
 
-/// Trains one (model, device, seed) cell in this process.
+/// Train, validation and (GUE only) test sets in the layout a model expects, and the
+/// sequence length.
+struct Splits {
+    train: Dataset,
+    val: Dataset,
+    test: Option<Dataset>,
+    len: usize,
+}
+
+/// `sequence,label` rows after a header line.
+fn read_csv(path: &Path) -> Res<(Vec<Vec<u8>>, Vec<i64>)> {
+    let text = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let (mut seqs, mut labels) = (Vec::new(), Vec::new());
+    for (i, line) in text.lines().enumerate().skip(1) {
+        let (seq, label) = line
+            .split_once(',')
+            .ok_or_else(|| format!("{}:{}: expected sequence,label", path.display(), i + 1))?;
+        seqs.push(seq.as_bytes().to_vec());
+        labels.push(label.trim().parse()?);
+    }
+    Ok((seqs, labels))
+}
+
+fn load(a: &Args, cell: &Cell, channels_first: bool) -> Res<Splits> {
+    let encode = |seqs: &[Vec<u8>], labels: &[i64], len| -> Res<Dataset> {
+        let refs: Vec<&[u8]> = seqs.iter().map(|s| s.as_slice()).collect();
+        Ok(Dataset::from_sequences(
+            &refs,
+            labels,
+            &Alphabet::DNA,
+            len,
+            channels_first,
+        )?)
+    };
+    match cell.dataset {
+        None => {
+            let (seqs, labels) = synthetic_motif(a.n, a.len, b"TATAAA", 42);
+            let (train, val) = encode(&seqs, &labels, a.len)?.split(0.2, 1);
+            Ok(Splits {
+                train,
+                val,
+                test: None,
+                len: a.len,
+            })
+        }
+        Some(k) => {
+            let dir = a
+                .data
+                .as_ref()
+                .ok_or("gue needs --data")?
+                .join(format!("tf/{k}"));
+            let parts =
+                ["train", "dev", "test"].map(|split| read_csv(&dir.join(format!("{split}.csv"))));
+            let [train, dev, test] = parts;
+            let (train, dev, test) = (train?, dev?, test?);
+            let len = [&train, &dev, &test]
+                .iter()
+                .flat_map(|(seqs, _)| seqs.iter().map(|s| s.len()))
+                .max()
+                .unwrap_or(0);
+            Ok(Splits {
+                train: encode(&train.0, &train.1, len)?,
+                val: encode(&dev.0, &dev.1, len)?,
+                test: Some(encode(&test.0, &test.1, len)?),
+                len,
+            })
+        }
+    }
+}
+
+/// Trains one (dataset, model, device, seed) cell in this process.
 fn run_one(a: &Args) -> Res<()> {
     let (model_name, device, seed) = (&a.models[0], parse_device(&a.devices[0])?, a.seeds);
-    let (seqs, labels) = synthetic_motif(a.n, a.len, b"TATAAA", 42);
-    let refs: Vec<&[u8]> = seqs.iter().map(|s| s.as_slice()).collect();
+    let cell = cells(a).remove(0);
+    let data = load(a, &cell, channels_first(model_name))?;
     manual_seed(seed);
-    let (model, channels_first, lr) = build(model_name, a.len)?;
-    let (train, val) =
-        Dataset::from_sequences(&refs, &labels, &Alphabet::DNA, a.len, channels_first)?
-            .split(0.2, 1);
-    let task = task_name(a);
+    let (model, lr) = build(model_name, data.len)?;
     let spec = RunSpec {
-        task: &task,
+        task: &cell.name,
         model: model_name,
         device,
         seed,
         lr,
         epochs: a.epochs,
         batch: a.batch,
-        train: &train,
-        val: &val,
-        dir: run_dir(a, model_name, &device_label(device), seed),
+        train: &data.train,
+        val: &data.val,
+        test: data.test.as_ref(),
+        dir: run_dir(a, &cell.name, model_name, &device_label(device), seed),
     };
     let r = run::run(model.as_ref(), &spec)?;
     println!(
-        "{model_name} {} seed {seed}: accuracy {:.4}  MCC {:.4}  AUROC {:.4}  AUPRC {:.4}  {:.2} s/epoch",
-        r.device, r.accuracy, r.mcc, r.auroc, r.auprc, r.secs_per_epoch
+        "{} {model_name} {} seed {seed}: accuracy {:.4}  MCC {:.4}  AUROC {:.4}  AUPRC {:.4}  {:.2} s/epoch",
+        cell.name, r.device, r.accuracy, r.mcc, r.auroc, r.auprc, r.secs_per_epoch
     );
     Ok(())
 }
 
-/// Runs every (model, device, seed) cell in a child process, then writes the summary.
+/// Runs every (dataset, model, device, seed) cell in a child process, then writes the
+/// summaries.
 fn sweep(a: &Args) -> Res<()> {
     let exe = std::env::current_exe()?;
-    let total = a.models.len() * a.devices.len() * a.seeds as usize;
-    let mut cell = 0;
-    let mut rows = Vec::new();
-    for model in &a.models {
-        for device in &a.devices {
-            for seed in 1..=a.seeds {
-                cell += 1;
-                println!("[{cell}/{total}] {model} {device} seed {seed}");
-                let status = Command::new(&exe)
-                    .args(["run-one", "--model", model, "--device", device])
-                    .args(["--seed", &seed.to_string()])
-                    .args(["--epochs", &a.epochs.to_string()])
-                    .args(["--batch", &a.batch.to_string()])
-                    .args(["--n", &a.n.to_string(), "--len", &a.len.to_string()])
-                    .arg("--out")
-                    .arg(&a.out)
-                    .status()?;
-                if !status.success() {
-                    return Err(format!("{model} {device} seed {seed} failed ({status})").into());
+    let cells = cells(a);
+    let total = cells.len() * a.models.len() * a.devices.len() * a.seeds as usize;
+    let mut done = 0;
+    let mut all_rows = Vec::new();
+    for cell in &cells {
+        let mut rows = Vec::new();
+        for model in &a.models {
+            for device in &a.devices {
+                for seed in 1..=a.seeds {
+                    done += 1;
+                    println!(
+                        "[{done}/{total}] {} {model} {device} seed {seed}",
+                        cell.name
+                    );
+                    let mut cmd = Command::new(&exe);
+                    cmd.args(["run-one", "--task", &a.task, "--model", model])
+                        .args(["--device", device, "--seed", &seed.to_string()])
+                        .args(["--epochs", &a.epochs.to_string()])
+                        .args(["--batch", &a.batch.to_string()])
+                        .args(["--n", &a.n.to_string(), "--len", &a.len.to_string()])
+                        .arg("--out")
+                        .arg(&a.out);
+                    if let (Some(k), Some(data)) = (cell.dataset, &a.data) {
+                        cmd.args(["--dataset", &k.to_string()])
+                            .arg("--data")
+                            .arg(data);
+                    }
+                    let status = cmd.status()?;
+                    if !status.success() {
+                        return Err(format!(
+                            "{} {model} {device} seed {seed} failed ({status})",
+                            cell.name
+                        )
+                        .into());
+                    }
+                    let label = device_label(parse_device(device)?);
+                    let dir = run_dir(a, &cell.name, model, &label, seed);
+                    let json = fs::read_to_string(dir.join("run.json"))?;
+                    rows.push(serde_json::from_str::<Value>(&json)?);
                 }
-                let label = device_label(parse_device(device)?);
-                let json = fs::read_to_string(run_dir(a, model, &label, seed).join("run.json"))?;
-                rows.push(serde_json::from_str::<Value>(&json)?);
             }
         }
+        write_summary(&a.out.join(&cell.name), &rows, a.seeds)?;
+        all_rows.extend(rows);
     }
-    let root = a.out.join(task_name(a));
-    write_summary(&root, &rows, a.seeds)?;
-    println!("summary: {}", root.join("table.md").display());
+    if cells.len() > 1 {
+        let path = a.out.join(format!("{}-overview.md", a.task));
+        write_overview(&path, &all_rows, &cells, a.seeds)?;
+        println!("overview: {}", path.display());
+    }
     Ok(())
 }
 
@@ -352,11 +482,62 @@ fn write_summary(root: &Path, rows: &[Value], seeds: u64) -> Res<()> {
     Ok(())
 }
 
-fn main() -> Res<()> {
-    let a = parse_args()?;
-    match a.task.as_str() {
-        "motif" => sweep(&a),
+/// MCC and AUROC per dataset (columns) for each model and device (rows): the paper's table.
+fn write_overview(path: &Path, rows: &[Value], cells: &[Cell], seeds: u64) -> Res<()> {
+    let names: Vec<&str> = cells.iter().map(|c| c.name.as_str()).collect();
+    let mut groups: BTreeMap<(String, String), Vec<&Value>> = BTreeMap::new();
+    let mut order = Vec::new();
+    for row in rows {
+        let key = (
+            row["model"].as_str().unwrap_or_default().to_string(),
+            row["device"].as_str().unwrap_or_default().to_string(),
+        );
+        if !groups.contains_key(&key) {
+            order.push(key.clone());
+        }
+        groups.entry(key).or_default().push(row);
+    }
+    let mut md = String::new();
+    for (metric, label) in [("mcc", "MCC"), ("auroc", "AUROC")] {
+        writeln!(
+            md,
+            "## {label} on the test split, {seeds} seed(s), mean ± sample sd\n"
+        )?;
+        writeln!(md, "| model | device | {} |", names.join(" | "))?;
+        writeln!(md, "|---|---|{}", "---|".repeat(names.len()))?;
+        for key in &order {
+            let group = &groups[key];
+            let cols: Vec<String> = names
+                .iter()
+                .map(|name| {
+                    let values: Vec<f64> = group
+                        .iter()
+                        .filter(|r| r["task"].as_str() == Some(*name))
+                        .filter_map(|r| field(r, metric))
+                        .collect();
+                    if values.is_empty() {
+                        "-".to_string()
+                    } else {
+                        mean_sd(&values, 3)
+                    }
+                })
+                .collect();
+            writeln!(md, "| {} | {} | {} |", key.0, key.1, cols.join(" | "))?;
+        }
+        md.push('\n');
+    }
+    fs::write(path, md)?;
+    Ok(())
+}
+
+fn main() {
+    let result = parse_args().and_then(|a| match a.command.as_str() {
+        "motif" | "gue" => sweep(&a),
         "run-one" => run_one(&a),
         other => Err(format!("unknown task {other}\n\n{USAGE}").into()),
+    });
+    if let Err(e) = result {
+        eprintln!("error: {e}");
+        std::process::exit(1);
     }
 }
