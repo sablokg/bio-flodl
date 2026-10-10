@@ -189,3 +189,39 @@ fn curves_match_their_summary_metrics() {
     assert!(roc_curve(&[0.5, 0.6], &[1, 1]).is_none());
     assert!(pr_curve(&[0.5, 0.6], &[0, 0]).is_none());
 }
+
+#[test]
+fn motif_pfms_background_and_meme() {
+    use bio_flodl::motif::{background, pfms_from_activations, write_meme};
+    let seqs: [&[u8]; 3] = [b"ACGTTT", b"TTACGG", b"GGGTAC"];
+    let x = one_hot_batch(&seqs, &Alphabet::DNA, None).channels_first();
+    let (n, alphabet, len, width, filters) = (3, 4, 6, 2, 2);
+    let positions = len - width + 1;
+    // Filter 0 fires on the three "AC" windows and weakly elsewhere; filter 1 never fires.
+    let mut acts = vec![0.0f32; n * filters * positions];
+    for (s, hit) in [(0, 0), (1, 2), (2, 4)] {
+        for p in 0..positions {
+            acts[s * filters * positions + p] = if p == hit { 1.0 } else { 0.1 };
+        }
+    }
+    let pfms = pfms_from_activations(&x, n, alphabet, len, &acts, filters, width, 0.5);
+    assert_eq!(pfms[0].sites, 3);
+    assert_eq!(pfms[0].probs, vec![1., 0., 0., 0., 0., 1., 0., 0.]);
+    assert_eq!(pfms[0].consensus(b"ACGT"), "AC");
+    assert_eq!(pfms[1].sites, 0);
+
+    let bg = background(&x, n, alphabet, len);
+    let want = [3.0 / 18.0, 3.0 / 18.0, 6.0 / 18.0, 6.0 / 18.0];
+    assert!(bg.iter().zip(want).all(|(a, b)| (a - b).abs() < 1e-12));
+
+    let named: Vec<(String, _)> = pfms
+        .into_iter()
+        .enumerate()
+        .map(|(i, p)| (format!("f{i}"), p))
+        .collect();
+    let meme = write_meme(&named, Alphabet::DNA.symbols(), &bg);
+    assert!(meme.starts_with("MEME version 4\n"));
+    assert!(meme.contains("ALPHABET= ACGT"));
+    assert!(meme.contains("MOTIF f0\nletter-probability matrix: alength= 4 w= 2 nsites= 3"));
+    assert!(!meme.contains("MOTIF f1"), "a filter with no sites is left out");
+}
