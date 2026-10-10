@@ -34,14 +34,6 @@ name = "transformer"
 required-features = ["flodl"]
 
 [[example]]
-name = "gcn_graph"
-required-features = ["flodl"]
-
-[[example]]
-name = "gat_graph"
-required-features = ["flodl"]
-
-[[example]]
 name = "compose_sequential"
 required-features = ["flodl"]
 

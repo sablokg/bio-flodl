@@ -4,9 +4,7 @@
 #![cfg(feature = "flodl")]
 
 use flodl_bio::alphabet::Alphabet;
-use flodl_bio::bridge::{attention_mask_variable, gcn_adjacency_variable};
-use flodl_bio::data::{synthetic_graph_task, synthetic_motif, Dataset};
-use flodl_bio::graph::chain;
+use flodl_bio::data::{synthetic_motif, Dataset};
 use flodl_bio::prelude::*;
 
 fn motif_data(channels_first: bool) -> (Dataset, Dataset) {
@@ -78,30 +76,6 @@ fn train_every_model(dev: Device) -> Result<()> {
     let gru = BiRnnClassifier::new(RnnKind::Gru, 4, 8, 1, 0.0, 2)?;
     let mlp = FlatMlp::new(50 * 4, &[16], 2, 0.0)?;
     for model in [&transformer as &dyn Module, &lstm, &gru, &mlp] {
-        train_on(model, dev, &train, &val)?;
-    }
-
-    let g = chain(12);
-    let (train, val) = synthetic_graph_task(200, 12, 4, 3).split(0.2, 1);
-    let gcn = GcnNet::new(
-        gcn_adjacency_variable(&g)?,
-        4,
-        16,
-        2,
-        2,
-        0.0,
-        Readout::GraphMean,
-    )?;
-    let gat = GatNet::new(
-        attention_mask_variable(&g)?,
-        4,
-        8,
-        2,
-        2,
-        0.0,
-        Readout::GraphMean,
-    )?;
-    for model in [&gcn as &dyn Module, &gat] {
         train_on(model, dev, &train, &val)?;
     }
     Ok(())

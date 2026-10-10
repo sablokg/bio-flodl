@@ -12,7 +12,6 @@ flodl-bio is a community crate built on flodl, developed and maintained by Gaura
 | `models::cnn` | `MotifCnn` (parallel multi-width Conv1d motif scanners, global max-pool, filter extraction, activation scans), `DilatedResCnn` (residual dilated Conv1d, exponential receptive field) | tested, CPU + GPU |
 | `models::rnn` | `BiRnnClassifier` (bidirectional LSTM or GRU) | tested, CPU + GPU |
 | `models::transformer` | `TransformerClassifier` (pre-LN encoder, MHA, sinusoidal positions, optional attention mask) | tested, CPU + GPU |
-| `models::gnn` | `GcnLayer`/`GcnNet`, `GatLayer`/`GatNet` (multi-head, dense), node or graph-mean readout | tested, CPU + GPU |
 | `models::mlp` | `FlatMlp` baseline | tested, CPU + GPU |
 | `models::compose` | `Sequential`, `Residual`, `Lambda` (relu/gelu/global pooling/flatten/transpose), `ConcatBranches`: assemble **any** flodl layer into a trainable model | tested, CPU + GPU |
 | `prelude` | `use flodl_bio::prelude::*;` gives all of flodl plus this crate's models and trainer | tested |
@@ -56,7 +55,7 @@ sync with the flodl version you build against.
    exist. Without the feature, `flodl-bio` does not depend on flodl.
 2. **Only flodl's top-level exports.** Items that flodl keeps in a submodule without re-exporting at the root
    must be imported from `flodl` directly (add `flodl` to your own `Cargo.toml`; it is the same crate).
-3. **On a name clash, flodl-bio wins.** This crate's types (`MotifCnn`, `Sequential`, `Readout`, `fit`, `adam`, ...)
+3. **On a name clash, flodl-bio wins.** This crate's types (`MotifCnn`, `Sequential`, `fit`, `adam`, ...)
    are explicit re-exports and shadow glob-imported flodl names. I know of no actual clash but have not
    compared every flodl name against mine.
 4. flodl itself needs libtorch and Rust 1.91+.
@@ -108,8 +107,6 @@ Run with `cargo run --release --example <name>`; add `--features flodl` for the 
 | `dilated_cnn.rs` | yes | residual dilated CNN | **run** |
 | `birnn.rs` | yes | BiLSTM and BiGRU | **run** |
 | `transformer.rs` | yes | Transformer encoder | **run** |
-| `gcn_graph.rs` | yes | GCN graph classification on a contact graph | **run** |
-| `gat_graph.rs` | yes | multi-head GAT, same task | **run** |
 | `compose_sequential.rs` | yes | custom model from `Sequential` / `ConcatBranches` / `Lambda` using verified layers | **run** |
 | `bench_models.rs` | yes | train and inference throughput plus parameter count for every bundled model | **run** |
 | `tf_binding.rs` | yes | runs every sequence model on a positive/negative FASTA pair and prints accuracy, F1, MCC, AUROC, AUPRC, time | builds, **needs your data** |
@@ -146,7 +143,6 @@ so they are O(n log n).
 
 * CNNs: `[batch, alphabet, length]` (use `Dataset::from_sequences(.., channels_first = true)`)
 * RNN / Transformer / MLP: `[batch, length, alphabet]`
-* GNNs: `[nodes, features]` or `[batch, nodes, features]` sharing one adjacency
 
 ## Quick example
 
@@ -166,7 +162,7 @@ Full version: `examples/motif_cnn.rs`.
 
 Build against a CUDA libtorch with `--features cuda`, then move the model before creating its optimizer.
 `fit`, `evaluate`, `predict_probs` and `report` build their batches on the device of the model's parameters,
-and the GCN adjacency, GAT mask and transformer positions follow the input, so nothing else changes:
+and the transformer's positional table follows the input, so nothing else changes:
 
 ```rust
 let model = MotifCnn::new(&cfg)?;

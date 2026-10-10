@@ -9,7 +9,7 @@
 //! * [`io`]       – FASTA parsing, fixed-length cropping/padding
 //! * [`data`]     – datasets, batching, seeded RNG, metrics (accuracy, F1, MCC, AUROC)
 //! * `bridge` (feature `flodl`) – conversion to flodl tensors
-//! * `models` (feature `flodl`) – motif CNNs, BiLSTM/BiGRU, Transformer, GCN, GAT
+//! * `models` (feature `flodl`) – motif CNNs, BiLSTM/BiGRU, Transformer
 //! * `train` (feature `flodl`) – training / evaluation loops
 //! * `prelude` (feature `flodl`) – all of flodl + everything above in one import
 //!
@@ -71,7 +71,6 @@ pub mod prelude {
 
     pub use crate::models::cnn::{DilatedCnnConfig, DilatedResCnn, MotifCnn, MotifCnnConfig};
     pub use crate::models::compose::{ConcatBranches, Lambda, Residual, Sequential};
-    pub use crate::models::gnn::{GatLayer, GatNet, GcnLayer, GcnNet, Readout};
     pub use crate::models::mlp::FlatMlp;
     pub use crate::models::rnn::{BiRnnClassifier, RnnKind};
     pub use crate::models::transformer::{EncoderLayer, TransformerClassifier, TransformerConfig};
