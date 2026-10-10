@@ -147,6 +147,44 @@ fn tied_logits_are_not_counted_correct() -> Result<()> {
 }
 
 #[test]
+fn fit_with_reports_every_epoch() -> Result<()> {
+    let (train, val) = motif_data(true);
+    let model = MotifCnn::new(&MotifCnnConfig {
+        in_channels: 4,
+        filters: 8,
+        kernel_sizes: vec![6],
+        dropout: 0.0,
+        classes: 2,
+    })?;
+    let cfg = TrainConfig {
+        epochs: 3,
+        lr_decay: Some(0.5),
+        verbose: false,
+        ..Default::default()
+    };
+    let mut seen = Vec::new();
+    let history = fit_with(
+        &model,
+        &mut adam(&model, 1e-3),
+        &train,
+        Some(&val),
+        &cfg,
+        |s| seen.push((s.epoch, s.lr, s.secs)),
+    )?;
+    assert_eq!(seen.len(), history.len());
+    for ((epoch, lr, secs), h) in seen.iter().zip(&history) {
+        assert_eq!(*epoch, h.epoch);
+        assert_eq!(*lr, h.lr);
+        assert!(*secs > 0.0);
+    }
+    let lrs: Vec<f64> = seen.iter().map(|s| s.1).collect();
+    for (got, want) in lrs.iter().zip([1e-3, 5e-4, 2.5e-4]) {
+        assert!((got - want).abs() < 1e-12, "lr per epoch {lrs:?}");
+    }
+    Ok(())
+}
+
+#[test]
 fn models_train_on_cpu() -> Result<()> {
     train_every_model(Device::CPU)
 }

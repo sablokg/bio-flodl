@@ -6,7 +6,7 @@ Bioinformatics data layer **and model zoo** for [flodl](https://docs.rs/flodl) (
 
 | Area | Contents | Verified |
 |---|---|---|
-| Core (pure Rust, no libtorch) | FASTA parsing and fixed-length cropping/padding; DNA/RNA/protein alphabets; one-hot (strict/lenient/labels/batch+mask, channels-first); k-mers; reverse complement; graphs, dense/GCN-normalised/row-normalised adjacency, Laplacian, attention mask, contact maps, de Bruijn; datasets, batching, seeded RNG, accuracy / confusion matrix / macro-F1 / MCC / AUROC / AUPRC; synthetic motif and graph tasks; sinusoidal positions | 16 tests pass |
+| Core (pure Rust, no libtorch) | FASTA parsing and fixed-length cropping/padding; DNA/RNA/protein alphabets; one-hot (strict/lenient/labels/batch+mask, channels-first); k-mers; reverse complement; graphs, dense/GCN-normalised/row-normalised adjacency, Laplacian, attention mask, contact maps, de Bruijn; datasets, batching, seeded RNG, accuracy / confusion matrix / macro-F1 / MCC / AUROC / AUPRC, ROC and PR curve points; synthetic motif and graph tasks; sinusoidal positions | 17 tests pass |
 | `models::cnn` | `MotifCnn` (parallel multi-width Conv1d motif scanners, global max-pool, filter extraction), `DilatedResCnn` (residual dilated Conv1d, exponential receptive field) | tested, CPU + GPU |
 | `models::rnn` | `BiRnnClassifier` (bidirectional LSTM or GRU) | tested, CPU + GPU |
 | `models::transformer` | `TransformerClassifier` (pre-LN encoder, MHA, sinusoidal positions, optional attention mask) | tested, CPU + GPU |
@@ -14,7 +14,7 @@ Bioinformatics data layer **and model zoo** for [flodl](https://docs.rs/flodl) (
 | `models::mlp` | `FlatMlp` baseline | tested, CPU + GPU |
 | `models::compose` | `Sequential`, `Residual`, `Lambda` (relu/gelu/global pooling/flatten/transpose), `ConcatBranches`: assemble **any** flodl layer into a trainable model | tested, CPU + GPU |
 | `prelude` | `use bio_flodl::prelude::*;` gives all of flodl plus this crate's models and trainer | tested |
-| `train` | `fit` (any `Module` + any `Optimizer`, grad clipping, LR decay, early stopping), `evaluate`, `predict_proba`, `predict_probs`, `report` (accuracy, macro-F1, MCC, AUROC, AUPRC) | tested, CPU + GPU |
+| `train` | `fit` (any `Module` + any `Optimizer`, grad clipping, LR decay, early stopping), `fit_with` (same, with a per-epoch callback), `evaluate`, `predict_proba`, `predict_probs`, `report` (accuracy, macro-F1, MCC, AUROC, AUPRC) | tested, CPU + GPU |
 
 **"Tested, CPU + GPU" means** `tests/models.rs` trains and evaluates every bundled model, and a container
 holding `BatchNorm`, against flodl 0.8.0 (libtorch 2.10) on the CPU and, with `--features cuda`, on the GPU.

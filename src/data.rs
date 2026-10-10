@@ -273,6 +273,66 @@ pub fn average_precision(scores: &[f32], labels: &[i64]) -> Option<f64> {
     Some(ap)
 }
 
+/// Positives and size of each run of tied scores, highest score first.
+fn tie_groups(scores: &[f32], labels: &[i64]) -> Vec<(usize, usize)> {
+    let n = scores.len();
+    let mut order: Vec<usize> = (0..n).collect();
+    order.sort_by(|&a, &b| {
+        scores[b]
+            .partial_cmp(&scores[a])
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let mut groups = Vec::new();
+    let mut i = 0;
+    while i < n {
+        let mut j = i;
+        while j + 1 < n && scores[order[j + 1]] == scores[order[i]] {
+            j += 1;
+        }
+        let tp = (i..=j).filter(|&k| labels[order[k]] == 1).count();
+        groups.push((tp, j - i + 1));
+        i = j + 1;
+    }
+    groups
+}
+
+/// ROC curve as `(false positive rate, true positive rate)` points: `(0, 0)`, then one point
+/// per distinct score, highest first, ending at `(1, 1)`. Tied scores form a single point, so
+/// the trapezoidal area under the curve equals [`auroc`]. `None` when only one class is present.
+pub fn roc_curve(scores: &[f32], labels: &[i64]) -> Option<Vec<(f64, f64)>> {
+    let pos = labels.iter().filter(|&&l| l == 1).count();
+    let neg = scores.len() - pos;
+    if pos == 0 || neg == 0 {
+        return None;
+    }
+    let (mut tp, mut fp) = (0usize, 0usize);
+    let mut points = vec![(0.0, 0.0)];
+    for (group_tp, size) in tie_groups(scores, labels) {
+        tp += group_tp;
+        fp += size - group_tp;
+        points.push((fp as f64 / neg as f64, tp as f64 / pos as f64));
+    }
+    Some(points)
+}
+
+/// Precision-recall curve as `(recall, precision)` points, one per distinct score, highest
+/// first. Tied scores form a single point, so the step area `sum((r_i - r_(i-1)) * p_i)`
+/// equals [`average_precision`]. `None` in the same cases as [`average_precision`].
+pub fn pr_curve(scores: &[f32], labels: &[i64]) -> Option<Vec<(f64, f64)>> {
+    let pos = labels.iter().filter(|&&l| l == 1).count();
+    if pos == 0 || pos == scores.len() {
+        return None;
+    }
+    let (mut tp, mut seen) = (0usize, 0usize);
+    let mut points = Vec::new();
+    for (group_tp, size) in tie_groups(scores, labels) {
+        tp += group_tp;
+        seen += size;
+        points.push((tp as f64 / pos as f64, tp as f64 / seen as f64));
+    }
+    Some(points)
+}
+
 /// Synthetic graph-classification task for demos and benchmarks. Each sample is a one-hot
 /// node-feature matrix `[nodes, types]`; positive graphs over-represent type 0 in the first
 /// third of nodes. Pair it with a fixed adjacency shared by all samples.

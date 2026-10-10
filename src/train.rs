@@ -11,6 +11,7 @@ use crate::data::{
 use flodl::{
     clip_grad_norm, cross_entropy_loss, Adam, Device, Module, Optimizer, Tensor, Variable,
 };
+use std::time::Instant;
 
 /*
 Gaurav Sablok
@@ -52,6 +53,10 @@ pub struct EpochStats {
     pub train_acc: f64,
     pub val_loss: Option<f64>,
     pub val_acc: Option<f64>,
+    /// Learning rate used during the epoch.
+    pub lr: f64,
+    /// Wall time of the epoch in seconds, validation included.
+    pub secs: f64,
 }
 
 /// Convenience: Adam over all of the model's parameters.
@@ -125,6 +130,19 @@ pub fn fit<M: Module + ?Sized>(
     val: Option<&Dataset>,
     cfg: &TrainConfig,
 ) -> flodl::Result<Vec<EpochStats>> {
+    fit_with(model, opt, train, val, cfg, |_| {})
+}
+
+/// [`fit`], calling `on_epoch` with each epoch's statistics as soon as the epoch ends,
+/// for example to feed a `flodl::Monitor` or write curves while training runs.
+pub fn fit_with<M: Module + ?Sized>(
+    model: &M,
+    opt: &mut dyn Optimizer,
+    train: &Dataset,
+    val: Option<&Dataset>,
+    cfg: &TrainConfig,
+    mut on_epoch: impl FnMut(&EpochStats),
+) -> flodl::Result<Vec<EpochStats>> {
     let params = model.parameters();
     let device = model_device(model);
     let mut rng = Rng::new(cfg.seed);
@@ -132,6 +150,8 @@ pub fn fit<M: Module + ?Sized>(
     let (mut best_val, mut since_best) = (f64::INFINITY, 0usize);
 
     for epoch in 1..=cfg.epochs {
+        let started = Instant::now();
+        let lr = opt.lr();
         model.train();
         let (mut loss_sum, mut correct) = (0.0, 0.0);
         for idx in batch_indices(train.n, cfg.batch_size, Some(&mut rng)) {
@@ -161,6 +181,8 @@ pub fn fit<M: Module + ?Sized>(
             train_acc: correct / n,
             val_loss,
             val_acc,
+            lr,
+            secs: started.elapsed().as_secs_f64(),
         };
         if cfg.verbose {
             println!(
@@ -172,6 +194,7 @@ pub fn fit<M: Module + ?Sized>(
                 val_acc.map_or("-".into(), |v| format!("{v:.3}"))
             );
         }
+        on_epoch(&stats);
         history.push(stats);
         if let Some(f) = cfg.lr_decay {
             opt.scale_lr(f);
